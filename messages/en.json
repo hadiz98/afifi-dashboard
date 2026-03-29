@@ -1,14 +1,47 @@
 {
+  "Common": {
+    "signOut": "Sign out"
+  },
+  "Nav": {
+    "brand": "Afifi",
+    "productTagline": "Admin dashboard",
+    "sectionMain": "Main",
+    "sectionStaff": "Administration",
+    "home": "Home",
+    "profile": "Profile",
+    "password": "Password",
+    "sessions": "Sessions",
+    "users": "Users",
+    "roles": "Roles"
+  },
   "HomePage": {
     "title": "Afifi dashboard",
-    "subtitle": "Next.js dashboard for auth and role management. Use the menu to switch language.",
-    "cta": "Get started",
-    "signOut": "Sign out"
+    "subtitle": "Manage your account, security, and organization from one place.",
+    "cta": "Edit profile",
+    "live": "Live",
+    "guest": "Signed in",
+    "welcomeCardTitle": "Your workspace",
+    "welcomeCardDescription": "You’re authenticated with the API. Open your profile or security settings anytime.",
+    "cardProfileTitle": "Profile",
+    "cardProfileDescription": "Update your name and email for this account.",
+    "cardProfileAction": "Open profile",
+    "cardSecurityTitle": "Security",
+    "cardSecurityDescription": "Change password or review active refresh sessions.",
+    "cardPasswordAction": "Change password",
+    "cardSessionsAction": "Sessions",
+    "cardStaffTitle": "Organization",
+    "cardStaffDescription": "Manage users and roles (admin tools).",
+    "cardStaffLocked": "Staff-only tools. Ask an administrator for access.",
+    "cardStaffHint": "Admin or superadmin role required.",
+    "cardUsersAction": "Users",
+    "cardRolesAction": "Roles"
   },
   "LocaleSwitcher": {
     "label": "Language",
     "en": "English",
-    "ar": "Arabic"
+    "ar": "Arabic",
+    "enShort": "EN",
+    "arShort": "عربي"
   },
   "LoginPage": {
     "title": "Sign in",
@@ -24,5 +57,74 @@
     "successDescription": "Redirecting to the dashboard.",
     "lockoutTitle": "Too many attempts",
     "lockoutDescription": "Try again later."
+  },
+  "StaffGuard": {
+    "redirecting": "Redirecting…"
+  },
+  "ProfilePage": {
+    "title": "Profile",
+    "description": "Name and email are stored by the API.",
+    "nameLabel": "Name",
+    "emailLabel": "Email",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "nameRequired": "Name is required.",
+    "emailInvalid": "Enter a valid email.",
+    "loadError": "Could not load profile",
+    "saveError": "Could not save profile",
+    "saveSuccess": "Profile updated"
+  },
+  "PasswordPage": {
+    "title": "Change password",
+    "description": "After a successful change, all sessions are revoked and you must sign in again.",
+    "currentLabel": "Current password",
+    "newLabel": "New password",
+    "confirmLabel": "Confirm new password",
+    "submit": "Update password",
+    "submitting": "Updating…",
+    "currentRequired": "Current password is required.",
+    "newMin": "At least 8 characters.",
+    "confirmRequired": "Confirm your new password.",
+    "mismatch": "Passwords do not match.",
+    "success": "Password updated. Sign in again.",
+    "error": "Could not change password"
+  },
+  "SessionsPage": {
+    "title": "Active sessions",
+    "description": "Refresh tokens issued for this account. Revoke any session you don’t recognize.",
+    "countLabel": "sessions",
+    "empty": "No sessions returned.",
+    "loadError": "Could not load sessions",
+    "colId": "Id",
+    "colDetail": "Detail",
+    "colAction": "Action",
+    "revoke": "Revoke",
+    "revoked": "Session revoked",
+    "revokeError": "Could not revoke session"
+  },
+  "UsersPage": {
+    "title": "Users",
+    "description": "Directory of accounts (staff only).",
+    "total": "Total",
+    "page": "Page",
+    "prev": "Previous",
+    "next": "Next",
+    "empty": "No users in this page.",
+    "loadError": "Could not load users",
+    "colName": "Name",
+    "colEmail": "Email",
+    "colStatus": "Status",
+    "colRoles": "Roles",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "RolesPage": {
+    "title": "Roles",
+    "description": "Role catalog (staff only).",
+    "countLabel": "roles",
+    "empty": "No roles returned.",
+    "loadError": "Could not load roles",
+    "colRole": "Role",
+    "colDescription": "Description"
   }
 }

@@ -61,14 +61,14 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm shadow-md">
+    <Card className="w-full max-w-sm shadow-sm">
       <CardHeader className="space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="text-xl">{t("title")}</CardTitle>
             <CardDescription>{t("description")}</CardDescription>
           </div>
-          <LocaleSwitcher />
+          <LocaleSwitcher variant="compact" className="shrink-0" />
         </div>
       </CardHeader>
       <CardContent>

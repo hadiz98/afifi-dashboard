@@ -1,45 +1,73 @@
 "use client";
 
-import { Languages } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
+import { cn } from "@/lib/utils";
+import { useTransition } from "react";
 
-export function LocaleSwitcher() {
+type Props = {
+  className?: string;
+  variant?: "default" | "compact" | "sidebar";
+};
+
+export function LocaleSwitcher({
+  className,
+  variant = "default",
+}: Props) {
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("LocaleSwitcher");
+  const [pending, startTransition] = useTransition();
+
+  function switchLocale(next: string) {
+    if (next === locale || pending) return;
+    startTransition(() => {
+      router.replace(pathname, { locale: next });
+    });
+  }
+
+  const compact = variant === "compact";
+  const sidebar = variant === "sidebar";
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Languages className="size-4" aria-hidden />
-          <span className="sr-only">{t("label")}</span>
-          <span aria-hidden>{locale === "en" ? t("en") : t("ar")}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {routing.locales.map((loc) => (
-          <DropdownMenuItem
+    <div
+      role="group"
+      aria-label={t("label")}
+      className={cn(
+        "flex w-full rounded-md border p-1",
+        sidebar
+          ? "border-sidebar-border bg-sidebar-accent/40"
+          : "border-border bg-muted",
+        compact ? "max-w-[200px]" : "",
+        className
+      )}
+    >
+      {routing.locales.map((loc) => {
+        const active = loc === locale;
+        return (
+          <button
             key={loc}
-            disabled={loc === locale}
-            onSelect={() => {
-              router.replace(pathname, { locale: loc });
-            }}
+            type="button"
+            disabled={pending}
+            onClick={() => switchLocale(loc)}
+            className={cn(
+              "min-w-0 flex-1 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors disabled:opacity-60",
+              !compact && "px-3 py-2 text-sm",
+              active
+                ? sidebar
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                  : "bg-background text-foreground shadow-sm"
+                : sidebar
+                  ? "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  : "text-muted-foreground hover:bg-background/80 hover:text-foreground"
+            )}
           >
-            {loc === "en" ? t("en") : t("ar")}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            {loc === "en" ? t("enShort") : t("arShort")}
+          </button>
+        );
+      })}
+    </div>
   );
 }

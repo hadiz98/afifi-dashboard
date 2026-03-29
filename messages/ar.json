@@ -1,14 +1,47 @@
 {
+  "Common": {
+    "signOut": "تسجيل الخروج"
+  },
+  "Nav": {
+    "brand": "عفيفي",
+    "productTagline": "لوحة الإدارة",
+    "sectionMain": "رئيسي",
+    "sectionStaff": "الإدارة",
+    "home": "الرئيسية",
+    "profile": "الملف الشخصي",
+    "password": "كلمة المرور",
+    "sessions": "الجلسات",
+    "users": "المستخدمون",
+    "roles": "الأدوار"
+  },
   "HomePage": {
     "title": "لوحة تحكم عفيفي",
-    "subtitle": "لوحة تحكم باستخدام Next.js لإدارة المصادقة والأدوار. استخدم القائمة لتغيير اللغة.",
-    "cta": "ابدأ",
-    "signOut": "تسجيل الخروج"
+    "subtitle": "إدارة الحساب والأمان والمؤسسة من مكان واحد.",
+    "cta": "تعديل الملف",
+    "live": "مباشر",
+    "guest": "مسجّل الدخول",
+    "welcomeCardTitle": "مساحة العمل",
+    "welcomeCardDescription": "أنت موثّق عبر واجهة البرمجة. يمكنك فتح الملف الشخصي أو إعدادات الأمان في أي وقت.",
+    "cardProfileTitle": "الملف الشخصي",
+    "cardProfileDescription": "حدّث الاسم والبريد الإلكتروني لهذا الحساب.",
+    "cardProfileAction": "فتح الملف",
+    "cardSecurityTitle": "الأمان",
+    "cardSecurityDescription": "غيّر كلمة المرور أو راجع جلسات التحديث النشطة.",
+    "cardPasswordAction": "تغيير كلمة المرور",
+    "cardSessionsAction": "الجلسات",
+    "cardStaffTitle": "المؤسسة",
+    "cardStaffDescription": "إدارة المستخدمين والأدوار (أدوات المشرف).",
+    "cardStaffLocked": "أدوات للمشرفين فقط. اطلب صلاحية من المسؤول.",
+    "cardStaffHint": "يتطلب دور مسؤول أو مدير عام.",
+    "cardUsersAction": "المستخدمون",
+    "cardRolesAction": "الأدوار"
   },
   "LocaleSwitcher": {
     "label": "اللغة",
     "en": "الإنجليزية",
-    "ar": "العربية"
+    "ar": "العربية",
+    "enShort": "EN",
+    "arShort": "عربي"
   },
   "LoginPage": {
     "title": "تسجيل الدخول",
@@ -24,5 +57,74 @@
     "successDescription": "جارٍ إعادة التوجيه إلى لوحة التحكم.",
     "lockoutTitle": "محاولات كثيرة",
     "lockoutDescription": "حاول لاحقاً."
+  },
+  "StaffGuard": {
+    "redirecting": "جارٍ إعادة التوجيه…"
+  },
+  "ProfilePage": {
+    "title": "الملف الشخصي",
+    "description": "يُخزّن الاسم والبريد عبر واجهة البرمجة.",
+    "nameLabel": "الاسم",
+    "emailLabel": "البريد الإلكتروني",
+    "save": "حفظ التغييرات",
+    "saving": "جارٍ الحفظ…",
+    "nameRequired": "الاسم مطلوب.",
+    "emailInvalid": "أدخل بريداً صالحاً.",
+    "loadError": "تعذر تحميل الملف",
+    "saveError": "تعذر حفظ الملف",
+    "saveSuccess": "تم تحديث الملف"
+  },
+  "PasswordPage": {
+    "title": "تغيير كلمة المرور",
+    "description": "بعد التغيير الناجح تُلغى كل الجلسات ويجب تسجيل الدخول من جديد.",
+    "currentLabel": "كلمة المرور الحالية",
+    "newLabel": "كلمة المرور الجديدة",
+    "confirmLabel": "تأكيد كلمة المرور",
+    "submit": "تحديث كلمة المرور",
+    "submitting": "جارٍ التحديث…",
+    "currentRequired": "كلمة المرور الحالية مطلوبة.",
+    "newMin": "ثمانية أحرف على الأقل.",
+    "confirmRequired": "أكّد كلمة المرور الجديدة.",
+    "mismatch": "كلمتا المرور غير متطابقتين.",
+    "success": "تم تحديث كلمة المرور. سجّل الدخول من جديد.",
+    "error": "تعذر تغيير كلمة المرور"
+  },
+  "SessionsPage": {
+    "title": "الجلسات النشطة",
+    "description": "رموز التحديث لحسابك. ألغِ أي جلسة لا تعرفها.",
+    "countLabel": "جلسات",
+    "empty": "لا توجد جلسات.",
+    "loadError": "تعذر تحميل الجلسات",
+    "colId": "المعرّف",
+    "colDetail": "التفاصيل",
+    "colAction": "إجراء",
+    "revoke": "إلغاء",
+    "revoked": "تم إلغاء الجلسة",
+    "revokeError": "تعذر إلغاء الجلسة"
+  },
+  "UsersPage": {
+    "title": "المستخدمون",
+    "description": "دليل الحسابات (للمشرفين فقط).",
+    "total": "الإجمالي",
+    "page": "صفحة",
+    "prev": "السابق",
+    "next": "التالي",
+    "empty": "لا مستخدمين في هذه الصفحة.",
+    "loadError": "تعذر تحميل المستخدمين",
+    "colName": "الاسم",
+    "colEmail": "البريد",
+    "colStatus": "الحالة",
+    "colRoles": "الأدوار",
+    "active": "نشط",
+    "inactive": "موقوف"
+  },
+  "RolesPage": {
+    "title": "الأدوار",
+    "description": "قائمة الأدوار (للمشرفين فقط).",
+    "countLabel": "أدوار",
+    "empty": "لا أدوار.",
+    "loadError": "تعذر تحميل الأدوار",
+    "colRole": "الدور",
+    "colDescription": "الوصف"
   }
 }

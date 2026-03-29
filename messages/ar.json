@@ -1,0 +1,28 @@
+{
+  "HomePage": {
+    "title": "لوحة تحكم عفيفي",
+    "subtitle": "لوحة تحكم باستخدام Next.js لإدارة المصادقة والأدوار. استخدم القائمة لتغيير اللغة.",
+    "cta": "ابدأ",
+    "signOut": "تسجيل الخروج"
+  },
+  "LocaleSwitcher": {
+    "label": "اللغة",
+    "en": "الإنجليزية",
+    "ar": "العربية"
+  },
+  "LoginPage": {
+    "title": "تسجيل الدخول",
+    "description": "أدخل البريد الإلكتروني وكلمة المرور.",
+    "emailLabel": "البريد الإلكتروني",
+    "passwordLabel": "كلمة المرور",
+    "submit": "دخول",
+    "submitting": "جارٍ تسجيل الدخول…",
+    "emailInvalid": "أدخل بريداً إلكترونياً صالحاً.",
+    "passwordRequired": "كلمة المرور مطلوبة.",
+    "errorTitle": "تعذر تسجيل الدخول",
+    "successTitle": "مرحباً",
+    "successDescription": "جارٍ إعادة التوجيه إلى لوحة التحكم.",
+    "lockoutTitle": "محاولات كثيرة",
+    "lockoutDescription": "حاول لاحقاً."
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "HomePage": {
+    "title": "Afifi dashboard",
+    "subtitle": "Next.js dashboard for auth and role management. Use the menu to switch language.",
+    "cta": "Get started",
+    "signOut": "Sign out"
+  },
+  "LocaleSwitcher": {
+    "label": "Language",
+    "en": "English",
+    "ar": "Arabic"
+  },
+  "LoginPage": {
+    "title": "Sign in",
+    "description": "Use your account email and password.",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "emailInvalid": "Enter a valid email address.",
+    "passwordRequired": "Password is required.",
+    "errorTitle": "Could not sign in",
+    "successTitle": "Welcome",
+    "successDescription": "Redirecting to the dashboard.",
+    "lockoutTitle": "Too many attempts",
+    "lockoutDescription": "Try again later."
+  }
+}

@@ -61,7 +61,16 @@ async function refreshAccessToken(): Promise<boolean> {
       const bundle = normalizeAuthBundle(record.data);
       if (!bundle) return false;
 
-      setAuthSession(bundle);
+      setAuthSession(
+        {
+          accessToken: bundle.accessToken,
+          refreshToken: bundle.refreshToken,
+          user: bundle.user,
+          expiresIn: bundle.expiresIn,
+          sessionId: bundle.sessionId,
+        },
+        { fromRefresh: true }
+      );
       return true;
     } catch {
       return false;
@@ -149,27 +158,37 @@ export async function apiFetch(
 
 /**
  * Parses a JSON API envelope: throws ApiError when success === false.
+ * Supports ok responses with a raw array, empty body (204), or objects without a `data` field.
  */
 export async function readApiData<T = unknown>(res: Response): Promise<T> {
   const body = await parseJsonResponse(res);
-
-  if (body && typeof body === "object") {
-    const record = body as { success?: boolean; data?: unknown };
-    if (record.success === false) {
-      throw ApiError.fromBody(body, res.status);
-    }
-    if ("data" in record && record.data !== undefined && res.ok) {
-      if (record.success === true || record.success === undefined) {
-        return record.data as T;
-      }
-    }
-  }
 
   if (!res.ok) {
     throw ApiError.fromBody(body, res.status);
   }
 
-  throw new ApiError("Invalid API response", { statusCode: res.status });
+  if (body === null || body === undefined) {
+    return undefined as T;
+  }
+
+  if (Array.isArray(body)) {
+    return body as T;
+  }
+
+  if (typeof body === "object") {
+    const record = body as { success?: boolean; data?: unknown };
+    if (record.success === false) {
+      throw ApiError.fromBody(body, res.status);
+    }
+    if ("data" in record && record.data !== undefined) {
+      if (record.success === true || record.success === undefined) {
+        return record.data as T;
+      }
+    }
+    return body as T;
+  }
+
+  return body as T;
 }
 
 export async function apiJson<T = unknown>(

@@ -30,8 +30,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuthUser } from "@/hooks/use-auth-user";
-
-const LOGO_PATH = "/logo200x80.png";
+import { BRAND_MEDIA } from "@/lib/media-paths";
 
 type NavLabelKey =
   | "home"
@@ -92,10 +91,10 @@ export function AppSidebar() {
       >
         <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden bg-transparent group-data-[collapsible=icon]:size-9 md:size-12">
           <Image
-            src={LOGO_PATH}
+            src={BRAND_MEDIA.logo}
             alt=""
-            width={120}
-            height={48}
+            width={BRAND_MEDIA.logoWidth}
+            height={BRAND_MEDIA.logoHeight}
             className="h-full w-full object-contain dark:brightness-110"
             priority
           />

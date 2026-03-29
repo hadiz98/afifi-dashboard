@@ -21,6 +21,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import Image from "next/image";
+import { BRAND_MEDIA } from "@/lib/media-paths";
 
 export function LoginForm() {
   const t = useTranslations("LoginPage");
@@ -61,7 +63,17 @@ export function LoginForm() {
 
   return (
     <Card className="w-full max-w-sm shadow-sm">
-      <CardHeader className="space-y-2">
+      <CardHeader className="space-y-4">
+        <div className="flex justify-center">
+          <Image
+            src={BRAND_MEDIA.logo}
+            alt=""
+            width={BRAND_MEDIA.logoWidth}
+            height={BRAND_MEDIA.logoHeight}
+            className="h-10 w-auto object-contain dark:brightness-110"
+            priority
+          />
+        </div>
         <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="text-xl">{t("title")}</CardTitle>

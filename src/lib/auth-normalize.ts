@@ -11,6 +11,25 @@ function pickString(
   return undefined;
 }
 
+function pickSessionId(obj: Record<string, unknown>): string | undefined {
+  for (const key of [
+    "sessionId",
+    "currentSessionId",
+    "refreshSessionId",
+    "session_id",
+  ]) {
+    const v = obj[key];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  const session = obj.session;
+  if (session && typeof session === "object") {
+    const s = session as Record<string, unknown>;
+    const id = s.id ?? s.sessionId;
+    if (typeof id === "string" && id.length > 0) return id;
+  }
+  return undefined;
+}
+
 function pickExpiresInSeconds(obj: Record<string, unknown>): number | undefined {
   const raw = obj.expiresIn ?? obj.expires_in;
   if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
@@ -42,6 +61,8 @@ export type AuthBundle = {
   user: unknown;
   /** Access token lifetime in seconds (e.g. JWT `exp` window), when API sends it. */
   expiresIn?: number;
+  /** Refresh-session row id for the current login, when API sends it (sessions UI). */
+  sessionId?: string;
 };
 
 export function normalizeAuthBundle(data: unknown): AuthBundle | null {
@@ -70,11 +91,13 @@ export function normalizeAuthBundle(data: unknown): AuthBundle | null {
         ? o.profile
         : null;
   const expiresIn = pickExpiresInSeconds(o);
+  const sessionId = pickSessionId(o);
 
   return {
     accessToken,
     refreshToken,
     user: user ?? null,
     ...(expiresIn !== undefined ? { expiresIn } : {}),
+    ...(sessionId !== undefined ? { sessionId } : {}),
   };
 }

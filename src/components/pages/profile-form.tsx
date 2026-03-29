@@ -103,7 +103,18 @@ export function ProfileForm() {
           refreshToken: refresh,
           user: meRaw,
         });
-        if (bundle) setAuthSession(bundle);
+        if (bundle) {
+          setAuthSession(
+            {
+              accessToken: bundle.accessToken,
+              refreshToken: bundle.refreshToken,
+              user: bundle.user,
+              expiresIn: bundle.expiresIn,
+              sessionId: bundle.sessionId,
+            },
+            { fromRefresh: true }
+          );
+        }
       }
       toast.success(t("saveSuccess"));
     } catch (e) {

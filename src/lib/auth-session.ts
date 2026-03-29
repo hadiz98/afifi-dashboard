@@ -4,6 +4,7 @@ export const AFIFI_AUTH_CHANGED_EVENT = "afifi-auth-changed";
 const ACCESS = "afifi_access_token";
 const REFRESH = "afifi_refresh_token";
 const USER = "afifi_user";
+const SESSION_ROW_ID = "afifi_session_row_id";
 const ACCESS_EXPIRES_AT_MS = "afifi_access_expires_at_ms";
 const SESSION_COOKIE = "afifi_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
@@ -32,6 +33,12 @@ export function getStoredUserJson(): string | null {
   return sessionStorage.getItem(USER);
 }
 
+/** Backend refresh-session row id for this browser, when provided at login (optional). */
+export function getCurrentSessionRowId(): string | null {
+  if (!isBrowser()) return null;
+  return sessionStorage.getItem(SESSION_ROW_ID);
+}
+
 /** Epoch ms when access token should be treated as expired (client hint; verify with API). */
 export function getAccessTokenExpiresAtMs(): number | null {
   if (!isBrowser()) return null;
@@ -41,16 +48,30 @@ export function getAccessTokenExpiresAtMs(): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function setAuthSession(payload: {
-  accessToken: string;
-  refreshToken: string;
-  user: unknown;
-  expiresIn?: number;
-}): void {
+export function setAuthSession(
+  payload: {
+    accessToken: string;
+    refreshToken: string;
+    user: unknown;
+    expiresIn?: number;
+    sessionId?: string;
+  },
+  opts?: { fromRefresh?: boolean }
+): void {
   if (!isBrowser()) return;
   sessionStorage.setItem(ACCESS, payload.accessToken);
   sessionStorage.setItem(REFRESH, payload.refreshToken);
   sessionStorage.setItem(USER, JSON.stringify(payload.user ?? null));
+
+  if (opts?.fromRefresh) {
+    if (payload.sessionId != null && payload.sessionId.length > 0) {
+      sessionStorage.setItem(SESSION_ROW_ID, payload.sessionId);
+    }
+  } else if (payload.sessionId != null && payload.sessionId.length > 0) {
+    sessionStorage.setItem(SESSION_ROW_ID, payload.sessionId);
+  } else {
+    sessionStorage.removeItem(SESSION_ROW_ID);
+  }
 
   if (
     payload.expiresIn != null &&
@@ -74,6 +95,7 @@ export function clearAuthSession(): void {
   sessionStorage.removeItem(ACCESS);
   sessionStorage.removeItem(REFRESH);
   sessionStorage.removeItem(USER);
+  sessionStorage.removeItem(SESSION_ROW_ID);
   sessionStorage.removeItem(ACCESS_EXPIRES_AT_MS);
   document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0`;
   emitAuthChanged();

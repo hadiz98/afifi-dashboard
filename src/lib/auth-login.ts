@@ -16,6 +16,12 @@ export async function loginWithPassword(email: string, password: string) {
   if (!bundle) {
     throw new ApiError("Invalid login response", { statusCode: 502 });
   }
-  setAuthSession(bundle);
+  setAuthSession({
+    accessToken: bundle.accessToken,
+    refreshToken: bundle.refreshToken,
+    user: bundle.user,
+    expiresIn: bundle.expiresIn,
+    sessionId: bundle.sessionId,
+  });
   return bundle;
 }

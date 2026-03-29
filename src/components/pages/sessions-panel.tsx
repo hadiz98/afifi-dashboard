@@ -1,11 +1,16 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { RefreshCw, Trash2 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { apiFetch, readApiData } from "@/lib/api";
 import { toastApiError } from "@/lib/toast-api-error";
+import {
+  clearAuthSession,
+  getCurrentSessionRowId,
+} from "@/lib/auth-session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,39 +30,80 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-function extractSessions(data: unknown): Record<string, unknown>[] {
+type Row = Record<string, unknown>;
+
+function extractSessions(data: unknown): Row[] {
   if (Array.isArray(data)) {
-    return data.filter((x): x is Record<string, unknown> => !!x && typeof x === "object");
+    return data.filter((x): x is Row => !!x && typeof x === "object");
   }
   if (data && typeof data === "object") {
     const o = data as Record<string, unknown>;
-    const list = o.sessions ?? o.items ?? o.data;
+    const list =
+      o.sessions ??
+      o.items ??
+      o.data ??
+      o.rows ??
+      o.refreshSessions ??
+      o.results;
     if (Array.isArray(list)) {
-      return list.filter((x): x is Record<string, unknown> => !!x && typeof x === "object");
+      return list.filter((x): x is Row => !!x && typeof x === "object");
     }
   }
   return [];
 }
 
-function cellId(row: Record<string, unknown>): string {
-  const id = row.id ?? row.sessionId;
-  return typeof id === "string" ? id : String(id ?? "");
+function cellId(row: Row): string {
+  for (const key of [
+    "id",
+    "_id",
+    "sessionId",
+    "session_id",
+    "refreshSessionId",
+    "tokenId",
+  ]) {
+    const v = row[key];
+    if (typeof v === "string" && v.length > 0) return v;
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  }
+  return "";
 }
 
-function cellPreview(row: Record<string, unknown>): string {
-  const keys = ["userAgent", "ip", "ipAddress", "createdAt", "expiresAt"];
-  for (const k of keys) {
-    const v = row[k];
-    if (typeof v === "string" && v.length > 0) {
-      return v.length > 80 ? `${v.slice(0, 80)}…` : v;
-    }
+function rowUserAgent(row: Row): string {
+  const v = row.userAgent ?? row.user_agent ?? row.device ?? row.client;
+  return typeof v === "string" && v.length > 0 ? v : "—";
+}
+
+function rowIp(row: Row): string {
+  const v = row.ip ?? row.ipAddress ?? row.ip_address;
+  return typeof v === "string" && v.length > 0 ? v : "—";
+}
+
+function rowIsCurrent(row: Row, id: string): boolean {
+  if (row.isCurrent === true || row.current === true) {
+    return true;
   }
-  return "—";
+  const stored = getCurrentSessionRowId();
+  return id.length > 0 && stored != null && stored === id;
 }
 
 export function SessionsPanel() {
   const t = useTranslations("SessionsPage");
-  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const locale = useLocale();
+  const router = useRouter();
+  const formatDate = useCallback((value: unknown): string => {
+    if (typeof value !== "string" || value.length === 0) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    try {
+      return new Intl.DateTimeFormat(locale, {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(d);
+    } catch {
+      return d.toISOString();
+    }
+  }, [locale]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState<string | null>(null);
 
@@ -79,8 +125,10 @@ export function SessionsPanel() {
     void load();
   }, [load]);
 
-  async function revoke(id: string) {
+  async function revoke(row: Row) {
+    const id = cellId(row);
     if (!id) return;
+    const wasCurrent = rowIsCurrent(row, id);
     setRevoking(id);
     try {
       const res = await apiFetch(`/api/auth/sessions/${encodeURIComponent(id)}`, {
@@ -90,6 +138,11 @@ export function SessionsPanel() {
         await readApiData<unknown>(res);
       }
       toast.success(t("revoked"));
+      if (wasCurrent) {
+        clearAuthSession();
+        router.replace("/login");
+        return;
+      }
       await load();
     } catch (e) {
       toastApiError(e, t("revokeError"));
@@ -99,16 +152,32 @@ export function SessionsPanel() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-4 md:p-8">
+    <div className="mx-auto w-full max-w-5xl p-4 md:p-8">
       <Card>
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle>{t("title")}</CardTitle>
             <CardDescription>{t("description")}</CardDescription>
           </div>
-          <Badge variant="secondary" className="w-fit shrink-0">
-            {loading ? "…" : rows.length} {t("countLabel")}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="w-fit shrink-0">
+              {loading ? "…" : rows.length} {t("countLabel")}
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={loading}
+              onClick={() => void load()}
+            >
+              <RefreshCw
+                className={`size-3.5 ${loading ? "animate-spin" : ""}`}
+                aria-hidden
+              />
+              {t("refresh")}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -120,13 +189,29 @@ export function SessionsPanel() {
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("empty")}</p>
           ) : (
-            <div className="rounded-md border">
+            <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[28%]">{t("colId")}</TableHead>
-                    <TableHead>{t("colDetail")}</TableHead>
-                    <TableHead className="w-[100px] text-end">
+                    <TableHead className="min-w-[7rem] whitespace-nowrap">
+                      {t("colId")}
+                    </TableHead>
+                    <TableHead className="min-w-[12rem]">
+                      {t("colClient")}
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">
+                      {t("colIp")}
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">
+                      {t("colCreated")}
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">
+                      {t("colExpires")}
+                    </TableHead>
+                    <TableHead className="w-[1%] whitespace-nowrap text-center">
+                      {t("colCurrent")}
+                    </TableHead>
+                    <TableHead className="w-[1%] text-end whitespace-nowrap">
                       {t("colAction")}
                     </TableHead>
                   </TableRow>
@@ -134,13 +219,41 @@ export function SessionsPanel() {
                 <TableBody>
                   {rows.map((row) => {
                     const id = cellId(row);
+                    const current = rowIsCurrent(row, id);
+                    const ua = rowUserAgent(row);
                     return (
                       <TableRow key={id || JSON.stringify(row)}>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
-                          {id || "—"}
+                        <TableCell
+                          className="max-w-[8rem] font-mono text-xs text-muted-foreground"
+                          title={id || undefined}
+                        >
+                          {id
+                            ? id.length > 12
+                              ? `${id.slice(0, 8)}…`
+                              : id
+                            : "—"}
                         </TableCell>
-                        <TableCell className="max-w-md truncate text-sm">
-                          {cellPreview(row)}
+                        <TableCell
+                          className="max-w-[min(24rem,50vw)] truncate text-sm"
+                          title={ua !== "—" ? ua : undefined}
+                        >
+                          {ua.length > 100 ? `${ua.slice(0, 100)}…` : ua}
+                        </TableCell>
+                        <TableCell className="text-sm">{rowIp(row)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {formatDate(row.createdAt ?? row.created_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                          {formatDate(row.expiresAt ?? row.expires_at)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {current ? (
+                            <Badge variant="default" className="text-[10px] font-normal">
+                              {t("currentBadge")}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-end">
                           <Button
@@ -149,9 +262,9 @@ export function SessionsPanel() {
                             size="sm"
                             className="gap-1"
                             disabled={!id || revoking === id}
-                            onClick={() => void revoke(id)}
+                            onClick={() => void revoke(row)}
                           >
-                            <Trash2 className="size-3.5" />
+                            <Trash2 className="size-3.5" aria-hidden />
                             {t("revoke")}
                           </Button>
                         </TableCell>

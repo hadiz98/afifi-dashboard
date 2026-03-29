@@ -1,9 +1,37 @@
 import type { Metadata } from "next";
-import { setRequestLocale } from "next-intl/server";
+import {
+  Geist,
+  Geist_Mono,
+  Noto_Sans_Arabic,
+  Nunito_Sans,
+} from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { Providers } from "@/components/providers";
 import { routing } from "@/i18n/routing";
+import { cn } from "@/lib/utils";
 
-const locales = routing.locales as readonly string[];
+const nunitoSans = Nunito_Sans({
+  subsets: ["latin"],
+  variable: "--font-nunito-sans",
+});
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const notoArabic = Noto_Sans_Arabic({
+  variable: "--font-noto-arabic",
+  subsets: ["arabic"],
+  weight: ["400", "500", "600", "700"],
+});
 
 type Props = {
   children: React.ReactNode;
@@ -21,17 +49,45 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   return {
-    title: locale === "ar" ? "لوحة تحكم عفيفي" : "Afifi dashboard",
+    title: locale === "ar" ? "لوحة تحكم عفيفي" : "Afifi Dashboard",
   };
 }
 
 export default async function LocaleLayout({ children, params }: Props) {
   const { locale } = await params;
-  if (!locales.includes(locale)) {
+
+  if (!(routing.locales as readonly string[]).includes(locale)) {
     notFound();
   }
 
   setRequestLocale(locale);
+  const messages = await getMessages();
 
-  return children;
+  const isArabic = locale === "ar";
+  const fontVariables = cn(
+    nunitoSans.variable,
+    geistSans.variable,
+    geistMono.variable,
+    notoArabic.variable
+  );
+
+  return (
+    <html
+      lang={locale}
+      dir={isArabic ? "rtl" : "ltr"}
+      className={cn("h-full antialiased", fontVariables)}
+      suppressHydrationWarning
+    >
+      <body
+        className={cn(
+          "flex min-h-svh bg-background text-foreground font-sans",
+          isArabic && "[font-family:var(--font-noto-arabic),var(--font-geist-sans),system-ui,sans-serif]"
+        )}
+      >
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <Providers>{children}</Providers>
+        </NextIntlClientProvider>
+      </body>
+    </html>
+  );
 }

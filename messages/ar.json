@@ -4,6 +4,9 @@
   },
   "Nav": {
     "brand": "عفيفي",
+    "appName": "عفيفي",
+    "appTagline": "لوحة الإدارة",
+    "logout": "تسجيل الخروج",
     "productTagline": "لوحة الإدارة",
     "sectionMain": "رئيسي",
     "sectionStaff": "الإدارة",

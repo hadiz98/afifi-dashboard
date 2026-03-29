@@ -154,12 +154,14 @@ export async function readApiData<T = unknown>(res: Response): Promise<T> {
   const body = await parseJsonResponse(res);
 
   if (body && typeof body === "object") {
-    const record = body as { success?: boolean };
+    const record = body as { success?: boolean; data?: unknown };
     if (record.success === false) {
       throw ApiError.fromBody(body, res.status);
     }
-    if ("data" in record && record.success === true) {
-      return (record as { data: T }).data;
+    if ("data" in record && record.data !== undefined && res.ok) {
+      if (record.success === true || record.success === undefined) {
+        return record.data as T;
+      }
     }
   }
 

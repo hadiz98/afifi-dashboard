@@ -4,6 +4,9 @@
   },
   "Nav": {
     "brand": "Afifi",
+    "appName": "Afifi",
+    "appTagline": "Admin dashboard",
+    "logout": "Sign out",
     "productTagline": "Admin dashboard",
     "sectionMain": "Main",
     "sectionStaff": "Administration",

@@ -1,9 +1,11 @@
 "use client";
 
+import type { HTMLAttributes } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Home,
   KeyRound,
+  LayoutDashboard,
+  LogOut,
   MonitorSmartphone,
   Shield,
   User,
@@ -11,79 +13,103 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
-import { Link, usePathname } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { LocaleSwitcher } from "@/components/locale-switcher";
-import { SignOutButton } from "@/components/sign-out-button";
-import { RoleBadge } from "@/components/role-badge";
+import { clearAuthSession } from "@/lib/auth-session";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuthUser } from "@/hooks/use-auth-user";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-}
+const LOGO_PATH = "/logo200x80.png";
 
-function NavSection({
-  items,
-  isActive,
-}: {
-  items: readonly NavItem[];
-  isActive: (href: string) => boolean;
-}) {
-  return (
-    <SidebarMenu>
-      {items.map(({ href, label, icon: Icon }) => (
-        <SidebarMenuItem key={href}>
-          <SidebarMenuButton
-            isActive={isActive(href)}
-            tooltip={label}
-            render={(props) => (
-              <Link href={href} {...props}>
-                <Icon className="size-4 shrink-0" />
-                <span>{label}</span>
-              </Link>
-            )}
-          />
-        </SidebarMenuItem>
-      ))}
-    </SidebarMenu>
-  );
-}
+type NavLabelKey =
+  | "home"
+  | "profile"
+  | "password"
+  | "sessions"
+  | "users"
+  | "roles";
+
+type NavDef = {
+  href: string;
+  labelKey: NavLabelKey;
+  icon: LucideIcon;
+  staffOnly?: true;
+};
+
+const allNavDefs: readonly NavDef[] = [
+  { href: "/", labelKey: "home", icon: LayoutDashboard },
+  { href: "/profile", labelKey: "profile", icon: User },
+  { href: "/password", labelKey: "password", icon: KeyRound },
+  { href: "/sessions", labelKey: "sessions", icon: MonitorSmartphone },
+  { href: "/users", labelKey: "users", icon: Users, staffOnly: true },
+  { href: "/roles", labelKey: "roles", icon: Shield, staffOnly: true },
+] as const;
 
 export function AppSidebar() {
   const locale = useLocale();
   const t = useTranslations("Nav");
   const pathname = usePathname();
-  const { roles, displayName, email, isStaff, ready } = useAuthUser();
+  const router = useRouter();
+  const { state: sidebarState } = useSidebar();
+  const { isStaff, ready } = useAuthUser();
 
-  const mainItems: readonly NavItem[] = [
-    { href: "/", label: t("home"), icon: Home },
-    { href: "/profile", label: t("profile"), icon: User },
-    { href: "/password", label: t("password"), icon: KeyRound },
-    { href: "/sessions", label: t("sessions"), icon: MonitorSmartphone },
-  ];
-
-  const staffItems: readonly NavItem[] = [
-    { href: "/users", label: t("users"), icon: Users },
-    { href: "/roles", label: t("roles"), icon: Shield },
-  ];
+  const navDefs = allNavDefs.filter(
+    (item) => !item.staffOnly || (ready && isStaff)
+  );
 
   function navActive(href: string): boolean {
     if (href === "/") return pathname === "/";
     return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
+  function handleLogout() {
+    clearAuthSession();
+    router.replace("/login");
+  }
+
+  function renderSidebarBrandButton(props: HTMLAttributes<HTMLAnchorElement>) {
+    return (
+      <Link
+        href="/"
+        {...props}
+        className={cn(
+          "flex items-center gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring",
+          "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:py-2",
+          props.className
+        )}
+      >
+        <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden bg-transparent group-data-[collapsible=icon]:size-9 md:size-12">
+          <Image
+            src={LOGO_PATH}
+            alt=""
+            width={120}
+            height={48}
+            className="h-full w-full object-contain dark:brightness-110"
+            priority
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
+          <span className="truncate text-sm font-semibold text-sidebar-foreground sm:text-base">
+            {t("appName")}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            {t("appTagline")}
+          </span>
+        </div>
+      </Link>
+    );
   }
 
   return (
@@ -91,78 +117,105 @@ export function AppSidebar() {
       side="right"
       collapsible="icon"
       dir={locale === "ar" ? "rtl" : "ltr"}
-      className="border-s border-sidebar-border"
+      className="border-inline-start border-border"
     >
-      <SidebarHeader className="gap-4 border-b border-sidebar-border px-2 py-4">
-        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-sidebar-border bg-background shadow-sm">
-            <Image
-              src="/logo200x80.png"
-              alt=""
-              width={200}
-              height={80}
-              className="h-8 w-auto max-w-[4.75rem] object-contain dark:brightness-110"
-              priority
+      <SidebarHeader className="border-b border-border px-3 py-4 sm:px-4 sm:py-5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+        <SidebarMenu className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:items-center">
+          <SidebarMenuItem className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+            <SidebarMenuButton
+              size="lg"
+              tooltip={t("appName")}
+              className="group-data-[collapsible=icon]:mx-auto"
+              render={renderSidebarBrandButton}
             />
-          </div>
-          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <p className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
-              {t("brand")}
-            </p>
-            <p className="text-xs font-medium text-sidebar-foreground/60">
-              {t("productTagline")}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-1.5 border-t border-sidebar-border/70 pt-3 group-data-[collapsible=icon]:hidden">
-          <p className="truncate text-sm font-medium text-sidebar-foreground">
-            {displayName || email || "—"}
-          </p>
-          {email ? (
-            <p className="truncate text-xs text-sidebar-foreground/65">
-              {email}
-            </p>
-          ) : null}
-          {roles.length > 0 ? (
-            <div className="flex flex-wrap gap-1 pt-1">
-              {roles.map((r) => (
-                <RoleBadge key={r} role={r} />
-              ))}
-            </div>
-          ) : null}
-        </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="gap-1 px-1 py-3">
-        <SidebarGroup className="p-0">
-          <SidebarGroupLabel>{t("sectionMain")}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <NavSection items={mainItems} isActive={navActive} />
+      <SidebarContent className="flex-1 overflow-hidden px-3 py-4 sm:px-4 sm:py-5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
+        <SidebarGroup>
+          <SidebarGroupContent className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
+            <SidebarMenu className="w-full gap-1.5 group-data-[collapsible=icon]:items-center">
+              {navDefs.map(({ href, labelKey, icon: Icon }) => {
+                const isActive = navActive(href);
+                const label = t(labelKey);
+
+                function renderSidebarNavButton(
+                  props: HTMLAttributes<HTMLAnchorElement>
+                ) {
+                  return (
+                    <Link
+                      href={href}
+                      {...props}
+                      className={cn(
+                        "flex w-full items-center gap-3 text-start",
+                        "group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0",
+                        props.className
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" aria-hidden />
+                      <span className="truncate group-data-[collapsible=icon]:hidden">
+                        {label}
+                      </span>
+                    </Link>
+                  );
+                }
+
+                return (
+                  <SidebarMenuItem
+                    key={href}
+                    className="mx-1.5 w-full group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center"
+                  >
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      tooltip={label}
+                      className={cn(
+                        "min-h-12 text-sm font-medium transition-all duration-200",
+                        "hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring",
+                        "data-active:border-primary data-active:border-inline-start-2 data-active:bg-primary/10 data-active:text-primary",
+                        "group-data-[collapsible=icon]:data-active:border-transparent group-data-[collapsible=icon]:data-active:border-inline-start-0",
+                        "group-data-[collapsible=icon]:m-1 group-data-[collapsible=icon]:min-h-12 group-data-[collapsible=icon]:rounded-lg group-data-[collapsible=icon]:p-2",
+                        "group-data-[collapsible=icon]:data-active:rounded-lg"
+                      )}
+                      render={renderSidebarNavButton}
+                    />
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {ready && isStaff ? (
-          <>
-            <SidebarSeparator className="mx-0 bg-sidebar-border/60" />
-            <SidebarGroup className="p-0">
-              <SidebarGroupLabel>{t("sectionStaff")}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <NavSection items={staffItems} isActive={navActive} />
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        ) : null}
       </SidebarContent>
 
-      <SidebarFooter className="gap-2 border-t border-sidebar-border px-2 py-3">
-        <div className="group-data-[collapsible=icon]:hidden">
-          <LocaleSwitcher
-            variant="sidebar"
-            className="w-full border-sidebar-border bg-sidebar-accent/40"
-          />
-        </div>
-        <SignOutButton className="w-full" />
+      <SidebarFooter className="overflow-hidden border-t border-border px-3 py-4 sm:px-4 sm:py-5 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
+        <SidebarMenu className="w-full gap-2 group-data-[collapsible=icon]:items-center">
+          <SidebarMenuItem className="w-full group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center">
+            <div className="flex w-full justify-center px-0 group-data-[collapsible=icon]:w-auto">
+              <LocaleSwitcher
+                variant={
+                  sidebarState === "collapsed" ? "sidebarIcon" : "sidebar"
+                }
+                className={
+                  sidebarState === "collapsed"
+                    ? undefined
+                    : "w-full border-sidebar-border bg-sidebar-accent/40"
+                }
+              />
+            </div>
+          </SidebarMenuItem>
+          <SidebarMenuItem className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center">
+            <SidebarMenuButton
+              onClick={handleLogout}
+              tooltip={t("logout")}
+              className="min-h-12 w-full gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:min-h-8 group-data-[collapsible=icon]:max-h-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:p-0"
+            >
+              <LogOut className="size-4 shrink-0" aria-hidden />
+              <span className="truncate group-data-[collapsible=icon]:hidden">
+                {t("logout")}
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );

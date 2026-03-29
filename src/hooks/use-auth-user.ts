@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getStoredUserJson } from "@/lib/auth-session";
+import {
+  AFIFI_AUTH_CHANGED_EVENT,
+  getStoredUserJson,
+} from "@/lib/auth-session";
 import {
   isStaffRole,
   isSuperadmin,
@@ -56,12 +59,19 @@ export function useAuthUser(): AuthUserState {
   const [state, setState] = useState<AuthUserState>(empty);
 
   useEffect(() => {
-    setState(readUser());
+    function sync() {
+      setState(readUser());
+    }
+    sync();
     function onStorage(e: StorageEvent) {
-      if (e.key === "afifi_user" || e.key === null) setState(readUser());
+      if (e.key === "afifi_user" || e.key === null) sync();
     }
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener(AFIFI_AUTH_CHANGED_EVENT, sync);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(AFIFI_AUTH_CHANGED_EVENT, sync);
+    };
   }, []);
 
   return state;

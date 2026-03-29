@@ -64,7 +64,6 @@ export function PasswordForm() {
       toast.success(t("success"));
       clearAuthSession();
       router.replace("/login");
-      router.refresh();
     } catch (e) {
       toastApiError(e, t("error"));
     }

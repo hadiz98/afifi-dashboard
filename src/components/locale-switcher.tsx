@@ -1,14 +1,24 @@
 "use client";
 
+import { CheckIcon, ChevronDownIcon, LanguagesIcon } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
-import { useTransition } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   className?: string;
-  variant?: "default" | "compact" | "sidebar";
+  variant?: "default" | "compact" | "sidebar" | "sidebarIcon";
 };
 
 export function LocaleSwitcher({
@@ -19,55 +29,109 @@ export function LocaleSwitcher({
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("LocaleSwitcher");
-  const [pending, startTransition] = useTransition();
-
-  function switchLocale(next: string) {
-    if (next === locale || pending) return;
-    startTransition(() => {
-      router.replace(pathname, { locale: next });
-    });
-  }
 
   const compact = variant === "compact";
   const sidebar = variant === "sidebar";
+  const sidebarIcon = variant === "sidebarIcon";
 
-  return (
-    <div
-      role="group"
-      aria-label={t("label")}
+  function switchLocale(next: string) {
+    if (next === locale) return;
+    router.replace(pathname, { locale: next });
+  }
+
+  const currentLabel = locale === "en" ? t("en") : t("ar");
+
+  const trigger = sidebarIcon ? (
+    <DropdownMenuTrigger
+      type="button"
+      aria-label={`${t("label")}: ${currentLabel}`}
       className={cn(
-        "flex w-full rounded-md border p-1",
-        sidebar
-          ? "border-sidebar-border bg-sidebar-accent/40"
-          : "border-border bg-muted",
-        compact ? "max-w-[200px]" : "",
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground outline-none transition-colors",
+        "hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
         className
       )}
     >
-      {routing.locales.map((loc) => {
-        const active = loc === locale;
-        return (
-          <button
-            key={loc}
-            type="button"
-            disabled={pending}
-            onClick={() => switchLocale(loc)}
-            className={cn(
-              "min-w-0 flex-1 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors disabled:opacity-60",
-              !compact && "px-3 py-2 text-sm",
-              active
-                ? sidebar
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                  : "bg-background text-foreground shadow-sm"
-                : sidebar
-                  ? "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  : "text-muted-foreground hover:bg-background/80 hover:text-foreground"
-            )}
-          >
-            {loc === "en" ? t("enShort") : t("arShort")}
-          </button>
-        );
-      })}
-    </div>
+      <LanguagesIcon className="size-4 opacity-80" aria-hidden />
+    </DropdownMenuTrigger>
+  ) : (
+    <DropdownMenuTrigger
+      type="button"
+      aria-label={t("label")}
+      className={cn(
+        "inline-flex w-full items-center justify-between gap-2 rounded-md border text-start text-sm font-medium shadow-xs outline-none transition-[color,box-shadow,background-color]",
+        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "disabled:pointer-events-none disabled:opacity-50",
+        compact
+          ? "h-8 max-w-[11rem] min-w-[8.5rem] px-2.5 text-xs"
+          : "h-9 px-3",
+        sidebar
+          ? "border-sidebar-border bg-sidebar-accent/45 text-sidebar-foreground hover:bg-sidebar-accent"
+          : "border-border bg-background hover:bg-muted/60",
+        className
+      )}
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <LanguagesIcon
+          className="size-4 shrink-0 opacity-70"
+          aria-hidden
+        />
+        <span className="truncate">{currentLabel}</span>
+      </span>
+      <ChevronDownIcon
+        className="size-4 shrink-0 opacity-60 rtl:rotate-180"
+        aria-hidden
+      />
+    </DropdownMenuTrigger>
+  );
+
+  return (
+    <DropdownMenu>
+      {trigger}
+      <DropdownMenuContent
+        align="start"
+        className={cn(
+          "min-w-[var(--anchor-width)] sm:min-w-44",
+          (sidebar || sidebarIcon) && "border-sidebar-border bg-popover"
+        )}
+      >
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("label")}
+            </span>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          {routing.locales.map((loc) => {
+            const selected = loc === locale;
+            return (
+              <DropdownMenuItem
+                key={loc}
+                onClick={() => switchLocale(loc)}
+                className={cn(
+                  "cursor-pointer gap-3",
+                  selected && "bg-accent/60"
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {loc === "en" ? t("en") : t("ar")}
+                </span>
+                <DropdownMenuShortcut className="opacity-80">
+                  {loc === "en" ? t("enShort") : t("arShort")}
+                </DropdownMenuShortcut>
+                <CheckIcon
+                  className={cn(
+                    "size-4 shrink-0",
+                    selected ? "text-primary opacity-100" : "opacity-0"
+                  )}
+                  aria-hidden
+                />
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

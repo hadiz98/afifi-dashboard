@@ -48,7 +48,6 @@ export function LoginForm() {
       await loginWithPassword(values.email, values.password);
       toast.success(t("successTitle"), { description: t("successDescription") });
       router.replace("/");
-      router.refresh();
     } catch (error) {
       if (error instanceof ApiError && error.statusCode === 429) {
         toast.error(t("lockoutTitle"), { description: error.message });

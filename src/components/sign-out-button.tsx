@@ -13,7 +13,6 @@ export function SignOutButton({ className }: { className?: string }) {
   function signOut() {
     clearAuthSession();
     router.replace("/login");
-    router.refresh();
   }
 
   return (

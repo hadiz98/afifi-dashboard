@@ -44,6 +44,9 @@ type SidebarContextProps = {
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
 
+/** Dock edge for the rail – used so collapsed tooltips open toward the page, not off-screen. */
+const SidebarRailSideContext = React.createContext<"left" | "right">("left")
+
 function useSidebar() {
   const context = React.useContext(SidebarContext)
   if (!context) {
@@ -51,6 +54,10 @@ function useSidebar() {
   }
 
   return context
+}
+
+function useSidebarRailSide(): "left" | "right" {
+  return React.useContext(SidebarRailSideContext)
 }
 
 function SidebarProvider({
@@ -166,16 +173,18 @@ function Sidebar({
 
   if (collapsible === "none") {
     return (
-      <div
-        data-slot="sidebar"
-        className={cn(
-          "flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground",
-          className
-        )}
-        {...props}
-      >
-        {children}
-      </div>
+      <SidebarRailSideContext.Provider value={side}>
+        <div
+          data-slot="sidebar"
+          className={cn(
+            "flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </div>
+      </SidebarRailSideContext.Provider>
     )
   }
 
@@ -244,7 +253,9 @@ function Sidebar({
           data-slot="sidebar-inner"
           className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
         >
-          {children}
+          <SidebarRailSideContext.Provider value={side}>
+            {children}
+          </SidebarRailSideContext.Provider>
         </div>
       </div>
     </div>
@@ -510,6 +521,8 @@ function SidebarMenuButton({
     tooltip?: string | React.ComponentProps<typeof TooltipContent>
   } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const { isMobile, state } = useSidebar()
+  const railSide = useSidebarRailSide()
+  const tooltipSide = railSide === "right" ? "left" : "right"
   const comp = useRender({
     defaultTagName: "button",
     props: mergeProps<"button">(
@@ -541,7 +554,7 @@ function SidebarMenuButton({
     <Tooltip>
       {comp}
       <TooltipContent
-        side="right"
+        side={tooltipSide}
         align="center"
         hidden={state !== "collapsed" || isMobile}
         {...tooltip}

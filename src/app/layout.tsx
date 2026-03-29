@@ -4,11 +4,13 @@ import {
   Geist,
   Geist_Mono,
   Noto_Sans_Arabic,
-  Nunito_Sans,
-} from "next/font/google";
+  Nunito_Sans, Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { Providers } from "@/components/providers";
+import { cn } from "@/lib/utils";
+
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 const nunitoSans = Nunito_Sans({
   subsets: ["latin"],
@@ -25,7 +27,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const notoArabic = Noto_Serif_Arabic({
+const notoArabic = Noto_Sans_Arabic({
   variable: "--font-noto-arabic",
   subsets: ["arabic"],
   weight: ["400", "500", "600", "700"],
@@ -41,7 +43,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html
       lang={locale}
       dir={dir}
-      className={`${fontVariables} h-full antialiased`}
+      className={cn("h-full", "antialiased", fontVariables, "font-sans", inter.variable)}
       suppressHydrationWarning
     >
       <body

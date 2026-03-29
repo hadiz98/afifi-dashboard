@@ -47,12 +47,16 @@ function NavSection({
     <SidebarMenu>
       {items.map(({ href, label, icon: Icon }) => (
         <SidebarMenuItem key={href}>
-          <SidebarMenuButton asChild isActive={isActive(href)} tooltip={label}>
-            <Link href={href}>
-              <Icon className="size-4 shrink-0" />
-              <span>{label}</span>
-            </Link>
-          </SidebarMenuButton>
+          <SidebarMenuButton
+            isActive={isActive(href)}
+            tooltip={label}
+            render={(props) => (
+              <Link href={href} {...props}>
+                <Icon className="size-4 shrink-0" />
+                <span>{label}</span>
+              </Link>
+            )}
+          />
         </SidebarMenuItem>
       ))}
     </SidebarMenu>

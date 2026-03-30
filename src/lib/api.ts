@@ -2,6 +2,7 @@ import { ApiError } from "@/lib/api-error";
 import {
   clearAuthSession,
   getAccessToken,
+  getAccessTokenExpiresAtMs,
   getRefreshToken,
   redirectToLogin,
   setAuthSession,
@@ -54,11 +55,15 @@ async function refreshAccessToken(): Promise<boolean> {
       }
 
       const record = body as { success?: boolean; data?: unknown };
-      if (record.success === false) {
-        return false;
-      }
+      if (record.success === false) return false;
 
-      const bundle = normalizeAuthBundle(record.data);
+      // Support both:
+      // - { success: true, data: { accessToken, refreshToken, ... } }
+      // - { accessToken, refreshToken, ... }
+      const payload =
+        "data" in record && record.data !== undefined ? record.data : body;
+
+      const bundle = normalizeAuthBundle(payload);
       if (!bundle) return false;
 
       setAuthSession(
@@ -118,10 +123,33 @@ export async function apiFetch(
 
   const doFetch = async (): Promise<Response> => {
     const headers = new Headers(initHeaders);
-    if (!headers.has("Content-Type") && rest.body) {
+    const body = rest.body;
+    const isFormData =
+      typeof FormData !== "undefined" && body instanceof FormData;
+    const isUrlSearchParams =
+      typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams;
+
+    // Only auto-set JSON content-type when the caller is sending JSON.
+    // For multipart/form-data (news image upload), we must NOT set it.
+    if (!headers.has("Content-Type") && body && !isFormData && !isUrlSearchParams) {
       headers.set("Content-Type", "application/json");
     }
     if (!skipAuth) {
+      // If we have a client-side expiry hint, refresh *before* the request
+      // so the UI doesn't first hit a 401 and then recover.
+      if (typeof window !== "undefined") {
+        const expiresAtMs = getAccessTokenExpiresAtMs();
+        const shouldRefresh =
+          typeof expiresAtMs === "number" &&
+          Number.isFinite(expiresAtMs) &&
+          Date.now() >= expiresAtMs - 5_000;
+        if (shouldRefresh) {
+          const refreshed = await refreshAccessToken();
+          if (!refreshed) {
+            authFailure();
+          }
+        }
+      }
       const token = getAccessToken();
       if (token) {
         headers.set("Authorization", `Bearer ${token}`);

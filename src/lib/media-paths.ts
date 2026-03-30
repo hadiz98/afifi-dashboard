@@ -4,4 +4,6 @@ export const BRAND_MEDIA = {
   /** Nominal intrinsic size of the logo asset (for layout / `next/image`). */
   logoWidth: 200,
   logoHeight: 80,
+  /** Uploaded images for the news feature (stored under `/public/images/news`). */
+  newsImageBase: "/images/news/",
 } as const;

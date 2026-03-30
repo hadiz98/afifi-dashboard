@@ -276,7 +276,7 @@ function NewsCardGrid({
             {formatNewsDate(locale, row.date ?? row.createdAt)}
           </span>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="h-7 gap-1 px-2 text-xs"
             nativeButton={false}

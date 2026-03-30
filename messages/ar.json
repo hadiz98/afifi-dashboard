@@ -15,6 +15,7 @@
     "password": "كلمة المرور",
     "sessions": "الجلسات",
     "news": "الأخبار",
+    "newsletter": "النشرة البريدية",
     "users": "المستخدمون",
     "roles": "الأدوار"
   },
@@ -179,6 +180,27 @@
     "createError": "تعذر إنشاء الخبر",
     "updateSuccess": "تم التحديث",
     "updateError": "تعذر تحديث الخبر"
+  },
+  "NewsletterPage": {
+    "title": "مشتركو النشرة",
+    "description": "عناوين البريد من نموذج الاشتراك العام. يمكنك تصدير القائمة كاملة كملف CSV في أي وقت.",
+    "totalLabel": "الإجمالي",
+    "pageLabel": "صفحة",
+    "refresh": "تحديث",
+    "exportCsv": "تصدير CSV",
+    "exporting": "جارٍ التصدير…",
+    "exportSuccess": "بدأ التنزيل ({count} مشترك)",
+    "exportEmpty": "لا يوجد مشتركون للتصدير.",
+    "exportError": "تعذر تصدير المشتركين",
+    "loadError": "تعذر تحميل المشتركين",
+    "empty": "لا مشتركين في هذه الصفحة.",
+    "emptyHint": "جرّب صفحة أخرى أو التصدير إذا كنت تتوقع بيانات.",
+    "prev": "السابق",
+    "next": "التالي",
+    "colIndex": "#",
+    "colFullName": "الاسم الكامل",
+    "colEmail": "البريد",
+    "colSubscribed": "تاريخ الاشتراك"
   },
   "NewsDetailsPage": {
     "loadError": "تعذر تحميل الخبر",

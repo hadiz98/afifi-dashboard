@@ -15,6 +15,7 @@
     "password": "Password",
     "sessions": "Sessions",
     "news": "News",
+    "newsletter": "Newsletter",
     "users": "Users",
     "roles": "Roles"
   },
@@ -179,6 +180,27 @@
     "createError": "Could not create news",
     "updateSuccess": "News updated",
     "updateError": "Could not update news"
+  },
+  "NewsletterPage": {
+    "title": "Newsletter subscribers",
+    "description": "Emails captured from the public subscribe form. Export the full list as CSV anytime.",
+    "totalLabel": "Total",
+    "pageLabel": "Page",
+    "refresh": "Refresh",
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting…",
+    "exportSuccess": "Download started ({count} subscribers)",
+    "exportEmpty": "No subscribers to export.",
+    "exportError": "Could not export subscribers",
+    "loadError": "Could not load subscribers",
+    "empty": "No subscribers on this page.",
+    "emptyHint": "Try another page or export if you expect data.",
+    "prev": "Previous",
+    "next": "Next",
+    "colIndex": "#",
+    "colFullName": "Full name",
+    "colEmail": "Email",
+    "colSubscribed": "Subscribed"
   },
   "NewsDetailsPage": {
     "loadError": "Could not load news",

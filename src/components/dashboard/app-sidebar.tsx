@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   MonitorSmartphone,
+  Mail,
   Newspaper,
   Shield,
   User,
@@ -39,6 +40,7 @@ type NavLabelKey =
   | "password"
   | "sessions"
   | "news"
+  | "newsletter"
   | "users"
   | "roles";
 
@@ -55,6 +57,12 @@ const allNavDefs: readonly NavDef[] = [
   { href: "/password", labelKey: "password", icon: KeyRound },
   { href: "/sessions", labelKey: "sessions", icon: MonitorSmartphone },
   { href: "/news", labelKey: "news", icon: Newspaper },
+  {
+    href: "/newsletter",
+    labelKey: "newsletter",
+    icon: Mail,
+    staffOnly: true,
+  },
   { href: "/users", labelKey: "users", icon: Users, staffOnly: true },
   { href: "/roles", labelKey: "roles", icon: Shield, staffOnly: true },
 ] as const;

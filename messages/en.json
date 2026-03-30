@@ -162,6 +162,8 @@
     "fieldTags": "Tags",
     "fieldTagsPlaceholder": "e.g. tag1, tag2",
     "fieldDate": "Date",
+    "fieldTime": "Time",
+    "pickDate": "Pick a date",
     "fieldIsActive": "Active",
     "fieldImage": "Image",
     "cancel": "Cancel",

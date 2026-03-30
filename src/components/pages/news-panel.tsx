@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { toastApiError } from "@/lib/toast-api-error";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { NewsDateTimePicker } from "@/components/news-date-time-picker";
 import {
   Table,
   TableBody,
@@ -68,9 +70,52 @@ type NewsFormState = {
   description: string;
   subDescription: string;
   tags: string;
-  date: string;
+  dateTime: Date | null;
   isActive: boolean;
 };
+
+type CreateFormErrors = Partial<
+  Record<"title" | "description" | "date" | "tags" | "image", string>
+>;
+
+const createNewsSchema = z.object({
+  title: z.string().trim().min(1, { message: "required" }),
+  description: z.string().trim().min(1, { message: "required" }),
+  dateTime: z.date({ message: "required" }),
+  tags: z
+    .string()
+    .refine((v) => parseCommaTags(v).length > 0, { message: "required" }),
+  imageFile: z.instanceof(File, { message: "required" }),
+});
+
+function validateCreate(values: {
+  title: string;
+  description: string;
+  dateTime: Date | null;
+  tags: string;
+  imageFile: File | null;
+}): { ok: true } | { ok: false; errors: CreateFormErrors } {
+  const parsed = createNewsSchema.safeParse({
+    title: values.title,
+    description: values.description,
+    dateTime: values.dateTime ?? undefined,
+    tags: values.tags,
+    imageFile: values.imageFile ?? undefined,
+  });
+
+  if (parsed.success) return { ok: true };
+
+  const next: CreateFormErrors = {};
+  for (const issue of parsed.error.issues) {
+    const key = issue.path[0];
+    if (key === "title") next.title = "required";
+    if (key === "description") next.description = "required";
+    if (key === "dateTime") next.date = "required";
+    if (key === "tags") next.tags = "required";
+    if (key === "imageFile") next.image = "required";
+  }
+  return { ok: false, errors: next };
+}
 
 type ViewMode = "grid" | "list";
 
@@ -91,11 +136,11 @@ function parseNewsList(data: unknown): NewsItem[] {
   return [];
 }
 
-function toIsoFromDateTimeLocal(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
+function parseCommaTags(input: string): string[] {
+  return input
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function formatNewsDate(locale: string, value: unknown): string {
@@ -260,13 +305,14 @@ export function NewsPanel() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [createErrors, setCreateErrors] = useState<CreateFormErrors>({});
   const [form, setForm] = useState<NewsFormState>({
     title: "",
     subtitle: "",
     description: "",
     subDescription: "",
     tags: "",
-    date: "",
+    dateTime: null,
     isActive: true,
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -294,33 +340,59 @@ export function NewsPanel() {
       (r.subtitle ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const submitDisabled = submitting || !form.title.trim() || !imageFile;
+  const validation = validateCreate({
+    title: form.title,
+    description: form.description,
+    dateTime: form.dateTime,
+    tags: form.tags,
+    imageFile,
+  });
+
+  const submitDisabled = submitting || validation.ok === false;
 
   async function onCreate() {
-    if (!imageFile) return;
+    if (validation.ok === false) {
+      setCreateErrors({
+        ...(validation.errors.title ? { title: `${t("fieldTitle")} is required` } : {}),
+        ...(validation.errors.description
+          ? { description: `${t("fieldDescription")} is required` }
+          : {}),
+        ...(validation.errors.date ? { date: `${t("fieldDate")} is required` } : {}),
+        ...(validation.errors.tags ? { tags: `${t("fieldTags")} is required` } : {}),
+        ...(validation.errors.image ? { image: `${t("fieldImage")} is required` } : {}),
+      });
+      return;
+    }
+
+    setCreateErrors((prev) =>
+      Object.keys(prev).length > 0 ? {} : prev
+    );
+
     const fd = new FormData();
     fd.append("title", form.title.trim());
     if (form.subtitle.trim()) fd.append("subtitle", form.subtitle.trim());
-    if (form.description.trim()) fd.append("description", form.description.trim());
+    fd.append("description", form.description.trim());
     if (form.subDescription.trim()) fd.append("subDescription", form.subDescription.trim());
-    if (form.tags.trim()) fd.append("tags", form.tags.trim());
-    const iso = toIsoFromDateTimeLocal(form.date);
-    if (iso) fd.append("date", iso);
+    if (parseCommaTags(form.tags).length > 0) {
+      fd.append("tags", form.tags.trim());
+    }
+    fd.append("date", form.dateTime!.toISOString());
     fd.append("isActive", form.isActive ? "true" : "false");
-    fd.append("image", imageFile);
+    fd.append("image", imageFile!);
 
     setSubmitting(true);
     try {
       await createNews(fd);
       toast.success(t("createSuccess"));
       setCreateOpen(false);
+      setCreateErrors({});
       setForm({
         title: "",
         subtitle: "",
         description: "",
         subDescription: "",
         tags: "",
-        date: "",
+        dateTime: null,
         isActive: true,
       });
       setImageFile(null);
@@ -623,9 +695,15 @@ export function NewsPanel() {
               <Input
                 id="news-title"
                 value={form.title}
-                onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
+                onChange={(e) => {
+                  setForm((s) => ({ ...s, title: e.target.value }));
+                  setCreateErrors((er) => ({ ...er, title: undefined }));
+                }}
                 placeholder="Article headline…"
               />
+              {createErrors.title ? (
+                <p className="text-xs text-destructive">{createErrors.title}</p>
+              ) : null}
             </div>
 
             {/* Subtitle */}
@@ -641,17 +719,25 @@ export function NewsPanel() {
 
             {/* Description */}
             <div className="grid gap-1.5">
-              <Label htmlFor="news-description">{t("fieldDescription")}</Label>
+              <Label htmlFor="news-description">{t("fieldDescription")}<span className="text-destructive">*</span></Label>
               <Textarea
                 id="news-description"
                 rows={3}
                 value={form.description}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, description: e.target.value }))
-                }
+                onChange={(e) => {
+                  setForm((s) => ({ ...s, description: e.target.value }));
+                  setCreateErrors((er) => ({ ...er, description: undefined }));
+                }}
                 placeholder="Main content…"
                 className="resize-none"
               />
+              {/* Clear error on edit */}
+              {createErrors.description ? (
+                <p className="text-xs text-destructive">{createErrors.description}</p>
+              ) : null}
+              {createErrors.description ? (
+                <p className="text-xs text-destructive">{createErrors.description}</p>
+              ) : null}
             </div>
 
             {/* Sub-description */}
@@ -670,35 +756,35 @@ export function NewsPanel() {
             </div>
 
             {/* Tags + Date */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="news-tags" className="flex items-center gap-1.5">
                   <Tag className="size-3 text-muted-foreground" />
-                  {t("fieldTags")}
+                  {t("fieldTags")}<span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="news-tags"
                   placeholder={t("fieldTagsPlaceholder")}
                   value={form.tags}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, tags: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    setForm((s) => ({ ...s, tags: e.target.value }));
+                    setCreateErrors((er) => ({ ...er, tags: undefined }));
+                  }}
                 />
+                {createErrors.tags ? (
+                  <p className="text-xs text-destructive">{createErrors.tags}</p>
+                ) : null}
               </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="news-date" className="flex items-center gap-1.5">
-                  <Calendar className="size-3 text-muted-foreground" />
-                  {t("fieldDate")}
-                </Label>
-                <Input
-                  id="news-date"
-                  type="datetime-local"
-                  value={form.date}
-                  onChange={(e) =>
-                    setForm((s) => ({ ...s, date: e.target.value }))
-                  }
-                />
-              </div>
+              
+              <NewsDateTimePicker
+                value={form.dateTime}
+                required={true}
+                onChange={(next) => {
+                  setForm((s) => ({ ...s, dateTime: next }));
+                  setCreateErrors((e) => ({ ...e, date: undefined }));
+                }}
+                error={createErrors.date}
+              />
             </div>
 
             {/* Active toggle */}
@@ -759,9 +845,15 @@ export function NewsPanel() {
                   type="file"
                   accept="image/*"
                   className="sr-only"
-                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    setImageFile(e.target.files?.[0] ?? null);
+                    setCreateErrors((er) => ({ ...er, image: undefined }));
+                  }}
                 />
               </label>
+              {createErrors.image ? (
+                <p className="text-xs text-destructive">{createErrors.image}</p>
+              ) : null}
             </div>
           </div>
 

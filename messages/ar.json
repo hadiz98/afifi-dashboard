@@ -162,6 +162,8 @@
     "fieldTags": "الوسوم",
     "fieldTagsPlaceholder": "مثال: tag1,tag2",
     "fieldDate": "التاريخ",
+    "fieldTime": "الوقت",
+    "pickDate": "اختر تاريخاً",
     "fieldIsActive": "نشط",
     "fieldImage": "صورة",
     "cancel": "إلغاء",

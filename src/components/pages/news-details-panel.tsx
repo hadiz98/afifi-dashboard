@@ -40,18 +40,18 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NewsDateTimePicker } from "@/components/news-date-time-picker";
-import { deleteNews, fetchNewsById, updateNews } from "@/lib/news-api";
+import { deleteNews, fetchNewsById, pickBestTranslation, updateNews } from "@/lib/news-api";
 import type { NewsItem } from "@/lib/news-api";
 import { cn } from "@/lib/utils";
 
 type EditFormState = {
-  title: string;
-  subtitle: string;
-  description: string;
-  subDescription: string;
-  tags: string;
   dateTime: Date | null;
   isActive: boolean;
+  translations: {
+    en: { title: string; subtitle: string; description: string; subDescription: string };
+    ar: { title: string; subtitle: string; description: string; subDescription: string };
+  };
+  tagsByLocale: { en: string; ar: string };
 };
 
 function safeDate(v: string | null | undefined): Date | null {
@@ -68,6 +68,49 @@ function parseTags(tags: string[] | null | undefined): string {
 
 function safeString(v: string | null | undefined): string {
   return typeof v === "string" ? v : "";
+}
+
+function emptyTranslations() {
+  return {
+    en: { title: "", subtitle: "", description: "", subDescription: "" },
+    ar: { title: "", subtitle: "", description: "", subDescription: "" },
+  };
+}
+
+function parseCommaTags(input: string): string[] {
+  return input
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function hasAnyTranslation(tr: ReturnType<typeof emptyTranslations>): boolean {
+  const values = [
+    tr.en.title,
+    tr.en.subtitle,
+    tr.en.description,
+    tr.en.subDescription,
+    tr.ar.title,
+    tr.ar.subtitle,
+    tr.ar.description,
+    tr.ar.subDescription,
+  ];
+  return values.some((v) => v.trim().length > 0);
+}
+
+function hasBothTranslationsRequired(
+  tr: ReturnType<typeof emptyTranslations>,
+  tagsByLocale: { en: string; ar: string }
+): boolean {
+  return (["en", "ar"] as const).every((loc) => {
+    const t = tr[loc];
+    const tags = parseCommaTags(tagsByLocale[loc]);
+    return (
+      t.title.trim().length > 0 &&
+      t.description.trim().length > 0 &&
+      tags.length > 0
+    );
+  });
 }
 
 export function NewsDetailsPanel({ id }: { id: string }) {
@@ -87,14 +130,12 @@ export function NewsDetailsPanel({ id }: { id: string }) {
   const [deleting, setDeleting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [form, setForm] = useState<EditFormState>({
-    title: "",
-    subtitle: "",
-    description: "",
-    subDescription: "",
-    tags: "",
     dateTime: null,
     isActive: true,
+    translations: emptyTranslations(),
+    tagsByLocale: { en: "", ar: "" },
   });
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   function renderStatusBadge(isActive?: boolean) {
     if (isActive === false) {
@@ -120,14 +161,29 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     try {
       const item = await fetchNewsById(id);
       setNews(item);
+      const enT = item.translations?.find((x) => x.locale === "en") ?? null;
+      const arT = item.translations?.find((x) => x.locale === "ar") ?? null;
       setForm({
-        title: safeString(item.title),
-        subtitle: safeString(item.subtitle),
-        description: safeString(item.description),
-        subDescription: safeString(item.subDescription),
-        tags: parseTags(item.tags),
         dateTime: safeDate(item.date),
         isActive: item.isActive !== false,
+        translations: {
+          en: {
+            title: safeString(enT?.title),
+            subtitle: safeString(enT?.subtitle),
+            description: safeString(enT?.description),
+            subDescription: safeString(enT?.subDescription),
+          },
+          ar: {
+            title: safeString(arT?.title),
+            subtitle: safeString(arT?.subtitle),
+            description: safeString(arT?.description),
+            subDescription: safeString(arT?.subDescription),
+          },
+        },
+        tagsByLocale: {
+          en: parseTags(enT?.tags),
+          ar: parseTags(arT?.tags),
+        },
       });
     } catch (e) {
       toastApiError(e, t("loadError"));
@@ -160,18 +216,38 @@ export function NewsDetailsPanel({ id }: { id: string }) {
 
   async function onUpdate() {
     if (!news) return;
+    const translationsOk = hasBothTranslationsRequired(
+      form.translations,
+      form.tagsByLocale
+    );
+    if (!translationsOk) {
+      setUpdateError(tCommon("translationsBothRequired"));
+      return;
+    }
+
     setSubmitting(true);
     try {
+      setUpdateError(null);
       const fd = new FormData();
-      fd.append("title", form.title.trim());
-      if (form.subtitle.trim()) fd.append("subtitle", form.subtitle.trim());
-      if (form.description.trim()) fd.append("description", form.description.trim());
-      if (form.subDescription.trim())
-        fd.append("subDescription", form.subDescription.trim());
-      if (form.tags.trim()) fd.append("tags", form.tags.trim());
       if (form.dateTime) fd.append("date", form.dateTime.toISOString());
       fd.append("isActive", form.isActive ? "true" : "false");
       if (imageFile) fd.append("image", imageFile);
+      const payload: Record<string, unknown> = (["en", "ar"] as const).reduce(
+        (acc, loc) => {
+          const tt = form.translations[loc];
+          const tags = parseCommaTags(form.tagsByLocale[loc]);
+          acc[loc] = {
+            title: tt.title.trim(),
+            subtitle: tt.subtitle.trim(),
+            description: tt.description.trim(),
+            subDescription: tt.subDescription.trim(),
+            tags,
+          };
+          return acc;
+        },
+        {} as Record<string, unknown>
+      );
+      fd.append("translations", JSON.stringify(payload));
 
       await updateNews(id, fd);
       toast.success(tCommon("updateSuccess"));
@@ -233,6 +309,14 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     );
   }
 
+  const tr = pickBestTranslation(news, locale);
+  const title = tr?.title ?? "—";
+  const subtitle = tr?.subtitle ?? "";
+  const description = tr?.description ?? "";
+  const subDescription = tr?.subDescription ?? "";
+  const tags = tr?.tags ?? [];
+  const supported = new Set((news.translations ?? []).map((x) => x.locale));
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 md:px-8">
       <Button
@@ -267,10 +351,10 @@ export function NewsDetailsPanel({ id }: { id: string }) {
                 </span>
               </div>
               <h1 className="mt-2 text-xl font-semibold leading-snug tracking-tight">
-                {news.title}
+                {title}
               </h1>
-              {news.subtitle ? (
-                <p className="mt-1 text-sm text-muted-foreground">{news.subtitle}</p>
+              {subtitle ? (
+                <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
               ) : null}
             </div>
 
@@ -295,6 +379,21 @@ export function NewsDetailsPanel({ id }: { id: string }) {
               </Button>
             </div>
           </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+            {(["en", "ar"] as const).map((loc) => (
+              <Badge
+                key={loc}
+                variant={supported.has(loc) ? "secondary" : "outline"}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-xs font-normal",
+                  !supported.has(loc) && "text-muted-foreground"
+                )}
+              >
+                {loc.toUpperCase()}
+              </Badge>
+            ))}
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-6 p-6">
@@ -306,9 +405,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
                     <img
                       src={news.image}
                       alt={
-                        news.title
-                          ? `${t("imageAlt")}: ${news.title}`
-                          : t("imageAlt")
+                        title ? `${t("imageAlt")}: ${title}` : t("imageAlt")
                       }
                       className="absolute inset-0 h-full w-full object-cover"
                       loading="lazy"
@@ -331,41 +428,84 @@ export function NewsDetailsPanel({ id }: { id: string }) {
           ) : null}
 
           {/* Body text */}
-          {(news.description || news.subDescription) ? (
-            <div className="space-y-3">
-              {news.description ? (
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {news.description}
-                </p>
-              ) : null}
-              {news.subDescription ? (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {news.subDescription}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {/* Tags */}
-          {news.tags && news.tags.length > 0 ? (
-            <div>
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                <Tag className="size-3" />
-                {t("tags")}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {news.tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="secondary"
-                    className="rounded-full px-2.5 py-0.5 text-xs font-normal"
+          <div className="space-y-4">
+            {(["en", "ar"] as const).map((loc) => {
+              const tRow =
+                news.translations?.find((x) => x.locale === loc) ?? null;
+              if (!tRow) return null;
+              return (
+                <div key={loc} className="rounded-lg border bg-muted/10 p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {loc.toUpperCase()}
+                    </p>
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {loc === "en" ? tCommon("langEn") : tCommon("langAr")}
+                    </Badge>
+                  </div>
+                  <p
+                    className={cn(
+                      "text-sm font-semibold leading-snug",
+                      loc === "ar" && "text-right"
+                    )}
+                    dir={loc === "ar" ? "rtl" : "ltr"}
                   >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          ) : null}
+                    {tRow.title}
+                  </p>
+                  {tRow.subtitle ? (
+                    <p
+                      className={cn(
+                        "mt-1 text-sm text-muted-foreground",
+                        loc === "ar" && "text-right"
+                      )}
+                      dir={loc === "ar" ? "rtl" : "ltr"}
+                    >
+                      {tRow.subtitle}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3 space-y-2">
+                    <p
+                      className={cn(
+                        "text-sm leading-relaxed whitespace-pre-wrap",
+                        loc === "ar" && "text-right"
+                      )}
+                      dir={loc === "ar" ? "rtl" : "ltr"}
+                    >
+                      {tRow.description}
+                    </p>
+                    {tRow.subDescription ? (
+                      <p
+                        className={cn(
+                          "text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap",
+                          loc === "ar" && "text-right"
+                        )}
+                        dir={loc === "ar" ? "rtl" : "ltr"}
+                      >
+                        {tRow.subDescription}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {Array.isArray(tRow.tags) && tRow.tags.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {tRow.tags.map((tag) => (
+                        <Badge
+                          key={`${loc}-${tag}`}
+                          variant="secondary"
+                          className="rounded-full px-2.5 py-0.5 text-xs font-normal"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tags are shown per translation above */}
         </CardContent>
       </Card>
 
@@ -387,95 +527,179 @@ export function NewsDetailsPanel({ id }: { id: string }) {
           <Separator />
 
           <div className="grid max-h-[58vh] gap-3.5 overflow-y-auto py-1 pr-1">
+            {updateError ? (
+              <p className="text-xs text-destructive">{updateError}</p>
+            ) : null}
+            <div className="grid gap-2 rounded-lg border bg-muted/10 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {tCommon("translationsLabel")}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs font-normal">
+                    {tCommon("required")}
+                  </Badge>
+                </div>
+              </div>
 
-            {/* Title */}
-            <FieldGroup
-              id="news-edit-title"
-              icon={<Text className="size-3" />}
-              label={tCommon("fieldTitle")}
-              required
-            >
-              <Input
-                id="news-edit-title"
-                value={form.title}
-                onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
-                placeholder={tCommon("placeholderTitle")}
-                className="h-8 text-sm"
-              />
-            </FieldGroup>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="grid gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">{tCommon("langEn")}</p>
+                  <Input
+                    value={form.translations.en.title}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, title: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldTitle")} (${tCommon("langEn")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    value={form.translations.en.subtitle}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, subtitle: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldSubtitle")} (${tCommon("langEn")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Textarea
+                    rows={2}
+                    value={form.translations.en.description}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, description: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldDescription")} (${tCommon("langEn")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Textarea
+                    rows={2}
+                    value={form.translations.en.subDescription}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, subDescription: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldSubDescription")} (${tCommon("langEn")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Input
+                    value={form.tagsByLocale.en}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        tagsByLocale: { ...s.tagsByLocale, en: e.target.value },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldTags")} (${tCommon("langEn")})`}
+                    className="h-8 text-sm"
+                  />
+                </div>
 
-            {/* Subtitle */}
-            <FieldGroup
-              id="news-edit-subtitle"
-              icon={<FileText className="size-3" />}
-              label={tCommon("fieldSubtitle")}
-            >
-              <Input
-                id="news-edit-subtitle"
-                value={form.subtitle}
-                onChange={(e) => setForm((s) => ({ ...s, subtitle: e.target.value }))}
-                placeholder={tCommon("placeholderSubtitle")}
-                className="h-8 text-sm"
-              />
-            </FieldGroup>
-
-            {/* Description */}
-            <FieldGroup
-              id="news-edit-description"
-              icon={<FileText className="size-3" />}
-              label={tCommon("fieldDescription")}
-            >
-              <Textarea
-                id="news-edit-description"
-                rows={3}
-                value={form.description}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, description: e.target.value }))
-                }
-                placeholder={tCommon("placeholderDescription")}
-                className="resize-none text-sm"
-              />
-            </FieldGroup>
-
-            {/* Sub-description */}
-            <FieldGroup
-              id="news-edit-subDescription"
-              icon={<FileText className="size-3" />}
-              label={tCommon("fieldSubDescription")}
-            >
-              <Textarea
-                id="news-edit-subDescription"
-                rows={2}
-                value={form.subDescription}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, subDescription: e.target.value }))
-                }
-                placeholder={tCommon("placeholderSubDescription")}
-                className="resize-none text-sm"
-              />
-            </FieldGroup>
-
-            {/* Tags + Date in a 2-col grid */}
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <FieldGroup
-                id="news-edit-tags"
-                icon={<Tag className="size-3" />}
-                label={tCommon("fieldTags")}
-              >
-                <Input
-                  id="news-edit-tags"
-                  placeholder={tCommon("fieldTagsPlaceholder")}
-                  value={form.tags}
-                  onChange={(e) => setForm((s) => ({ ...s, tags: e.target.value }))}
-                  className="h-8 text-sm"
-                />
-              </FieldGroup>
-
-              <NewsDateTimePicker
-                value={form.dateTime}
-                onChange={(next) => setForm((s) => ({ ...s, dateTime: next }))}
-              />
+                <div className="grid gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">{tCommon("langAr")}</p>
+                  <Input
+                    dir="rtl"
+                    value={form.translations.ar.title}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, title: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldTitle")} (${tCommon("langAr")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    dir="rtl"
+                    value={form.translations.ar.subtitle}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, subtitle: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldSubtitle")} (${tCommon("langAr")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Textarea
+                    dir="rtl"
+                    rows={2}
+                    value={form.translations.ar.description}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, description: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldDescription")} (${tCommon("langAr")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Textarea
+                    dir="rtl"
+                    rows={2}
+                    value={form.translations.ar.subDescription}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, subDescription: e.target.value },
+                        },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldSubDescription")} (${tCommon("langAr")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Input
+                    dir="rtl"
+                    value={form.tagsByLocale.ar}
+                    onChange={(e) => {
+                      setForm((s) => ({
+                        ...s,
+                        tagsByLocale: { ...s.tagsByLocale, ar: e.target.value },
+                      }));
+                    }}
+                    placeholder={`${tCommon("fieldTags")} (${tCommon("langAr")})`}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
             </div>
+
+            <NewsDateTimePicker
+              value={form.dateTime}
+              onChange={(next) => setForm((s) => ({ ...s, dateTime: next }))}
+            />
 
             {/* Active toggle */}
             <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5">
@@ -540,7 +764,10 @@ export function NewsDetailsPanel({ id }: { id: string }) {
               type="button"
               size="sm"
               onClick={() => void onUpdate()}
-              disabled={submitting || !form.title.trim()}
+              disabled={
+                submitting ||
+                !hasBothTranslationsRequired(form.translations, form.tagsByLocale)
+              }
               className="h-8 gap-1.5 px-3 text-xs"
             >
               <Save className="size-3.5" />

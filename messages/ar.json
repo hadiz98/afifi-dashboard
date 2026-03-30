@@ -147,6 +147,16 @@
     "refresh": "تحديث",
     "addNews": "إضافة خبر",
     "searchPlaceholder": "ابحث في الأخبار…",
+    "pageLabel": "صفحة",
+    "prev": "السابق",
+    "next": "التالي",
+    "translationsLabel": "الترجمات",
+    "langEn": "الإنجليزية",
+    "langAr": "العربية",
+    "required": "مطلوب",
+    "translationsBothRequired": "أضف الترجمات باللغتين (الإنجليزية والعربية) مع العنوان والوصف والوسوم.",
+    "imageMaxSize": "يجب ألا يتجاوز حجم الصورة 5 ميغابايت.",
+    "imageBadType": "نوع الصورة يجب أن يكون JPG أو PNG أو WEBP أو GIF.",
     "view": "عرض",
     "viewModeList": "عرض القائمة",
     "viewModeGrid": "عرض الشبكة",
@@ -220,6 +230,7 @@
     "imageAlt": "صورة الخبر",
     "imageBroken": "تعذر تحميل الصورة",
     "imageOptionalHint": "يمكن تركها فارغة إذا لم ترغب بتغيير الصورة.",
+    "clearTranslations": "مسح الترجمات",
     "update": "حفظ التحديث"
   }
 }

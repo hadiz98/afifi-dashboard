@@ -147,6 +147,16 @@
     "refresh": "Refresh",
     "addNews": "Add news",
     "searchPlaceholder": "Search articles…",
+    "pageLabel": "Page",
+    "prev": "Previous",
+    "next": "Next",
+    "translationsLabel": "Translations",
+    "langEn": "English",
+    "langAr": "Arabic",
+    "required": "Required",
+    "translationsBothRequired": "Add both translations (EN and AR) with title, description, and tags.",
+    "imageMaxSize": "Image must be 5 MB or less.",
+    "imageBadType": "Image type must be JPG, PNG, WEBP, or GIF.",
     "view": "View",
     "viewModeList": "List view",
     "viewModeGrid": "Grid view",
@@ -220,6 +230,7 @@
     "imageAlt": "News image",
     "imageBroken": "Image could not be loaded",
     "imageOptionalHint": "Optional: leave empty to keep the current image.",
+    "clearTranslations": "Clear translations",
     "update": "Save changes"
   }
 }

@@ -2,13 +2,20 @@ import { apiFetch, readApiData } from "@/lib/api";
 import { ApiError } from "@/lib/api-error";
 import { BRAND_MEDIA } from "@/lib/media-paths";
 
+export type NewsLocale = "en" | "ar";
+
+export type NewsTranslation = {
+  locale: NewsLocale;
+  title: string;
+  subtitle: string;
+  description?: string | null;
+  tags?: string[] | null;
+  subDescription?: string | null;
+};
+
 export type NewsItem = {
   id: string;
-  title: string;
-  subtitle?: string | null;
-  description?: string | null;
-  subDescription?: string | null;
-  tags?: string[] | null;
+  translations: NewsTranslation[];
   image?: string | null;
   date?: string | null;
   createdAt?: string | null;
@@ -71,14 +78,53 @@ function pickTags(obj: Record<string, unknown>): string[] | undefined {
   if (Array.isArray(v)) {
     return v.filter((x): x is string => typeof x === "string" && x.length > 0);
   }
+  if (v === null) {
+    return [];
+  }
   if (typeof v === "string") {
-    // backend can accept comma-separated tags; normalize similarly.
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((x): x is string => typeof x === "string" && x.length > 0);
+      }
+    } catch {
+      // fall through
+    }
     return v
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
   }
   return undefined;
+}
+
+function normalizeTranslation(data: unknown): NewsTranslation | null {
+  if (!data || typeof data !== "object") return null;
+  const o = data as Record<string, unknown>;
+  const localeRaw = pickString(o, ["locale"]);
+  const locale = (localeRaw?.toLowerCase() as NewsLocale | undefined) ?? undefined;
+  if (locale !== "en" && locale !== "ar") return null;
+  const title = pickString(o, ["title"]);
+  if (!title) return null;
+  const description = pickString(o, ["description"]) ?? null;
+  const tags = pickTags(o) ?? null;
+  return {
+    locale,
+    title,
+    subtitle: pickString(o, ["subtitle"]) ?? "",
+    description,
+    tags,
+    subDescription: pickString(o, ["subDescription", "sub_description"]) ?? null,
+  };
+}
+
+export function pickBestTranslation(item: NewsItem, locale: string): NewsTranslation | null {
+  const want: NewsLocale = locale === "ar" ? "ar" : "en";
+  const list = item.translations ?? [];
+  const exact = list.find((t) => t.locale === want);
+  if (exact) return exact;
+  const fallback = list.find((t) => t.locale === "en") ?? list[0];
+  return fallback ?? null;
 }
 
 export function normalizeNewsItem(data: unknown): NewsItem | null {
@@ -89,16 +135,33 @@ export function normalizeNewsItem(data: unknown): NewsItem | null {
     pickString(o, ["id", "_id", "newsId", "news_id"]) ??
     (typeof o.id !== "undefined" ? String(o.id) : undefined);
 
-  const title = pickString(o, ["title"]);
-  if (!id || !title) return null;
+  if (!id) return null;
 
   return {
     id,
-    title,
-    subtitle: pickString(o, ["subtitle"]) ?? null,
-    description: pickString(o, ["description"]) ?? null,
-    subDescription: pickString(o, ["subDescription", "sub_description"]) ?? null,
-    tags: pickTags(o) ?? null,
+    translations: (() => {
+      const raw = o.translations;
+      if (Array.isArray(raw)) {
+        return raw
+          .map((x) => normalizeTranslation(x))
+          .filter((x): x is NewsTranslation => x !== null);
+      }
+      // Support legacy map form: { en: {...}, ar: {...} }
+      if (raw && typeof raw === "object") {
+        const map = raw as Record<string, unknown>;
+        const out: NewsTranslation[] = [];
+        for (const loc of ["en", "ar"] as const) {
+          const entry = map[loc];
+          if (entry && typeof entry === "object") {
+            const merged = { ...(entry as Record<string, unknown>), locale: loc };
+            const n = normalizeTranslation(merged);
+            if (n) out.push(n);
+          }
+        }
+        return out;
+      }
+      return [];
+    })(),
     image: (() => {
       const img = pickString(o, ["image", "img"]);
       return img ? normalizeNewsImagePath(img) : null;
@@ -117,6 +180,81 @@ export async function fetchNewsList(params?: {
   const limit = params?.limit ?? 20;
   const res = await apiFetch(`/api/news?page=${page}&limit=${limit}`, { method: "GET" });
   return readApiData<unknown>(res);
+}
+
+export type NewsListMeta = {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+};
+
+export type NewsListPage = {
+  rows: NewsItem[];
+  meta: NewsListMeta;
+};
+
+async function parseJson(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Backend list response: { data: News[], meta: { total, page, limit, pages } }
+ * We parse the full envelope so UI can paginate.
+ */
+export async function fetchNewsListPage(params?: {
+  page?: number;
+  limit?: number;
+}): Promise<NewsListPage> {
+  const page = params?.page ?? 1;
+  const limit = params?.limit ?? 20;
+  const res = await apiFetch(`/api/news?page=${page}&limit=${limit}`, { method: "GET" });
+  const body = await parseJson(res);
+  if (!res.ok) {
+    throw ApiError.fromBody(body, res.status);
+  }
+  if (!body || typeof body !== "object") {
+    return { rows: [], meta: { total: 0, page, limit, pages: 1 } };
+  }
+  const record = body as Record<string, unknown>;
+  if (record.success === false) {
+    throw ApiError.fromBody(body, res.status);
+  }
+  // Backend may return either:
+  //  A) { data: News[], meta: {...} }
+  //  B) { data: { data: News[], meta: {...} } }
+  const outerData = record.data;
+  const inner =
+    outerData && typeof outerData === "object"
+      ? (outerData as Record<string, unknown>)
+      : null;
+
+  const list =
+    (inner && Array.isArray(inner.data) ? inner.data : null) ??
+    (Array.isArray(outerData) ? outerData : null);
+
+  const meta =
+    (inner?.meta as Record<string, unknown> | undefined) ??
+    (record.meta as Record<string, unknown> | undefined);
+  const rows = Array.isArray(list)
+    ? list.map((x) => normalizeNewsItem(x)).filter((x): x is NewsItem => x !== null)
+    : [];
+
+  const total = typeof meta?.total === "number" ? meta.total : rows.length;
+  const metaPage = typeof meta?.page === "number" ? meta.page : page;
+  const metaLimit = typeof meta?.limit === "number" ? meta.limit : limit;
+  const pages =
+    typeof meta?.pages === "number"
+      ? meta.pages
+      : Math.max(1, Math.ceil(total / Math.max(1, metaLimit)) || 1);
+
+  return { rows, meta: { total, page: metaPage, limit: metaLimit, pages } };
 }
 
 export async function fetchNewsById(id: string): Promise<NewsItem> {

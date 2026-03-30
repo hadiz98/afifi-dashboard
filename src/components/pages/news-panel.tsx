@@ -57,50 +57,73 @@ import {
 } from "lucide-react";
 import {
   createNews,
-  fetchNewsList,
   normalizeNewsItem,
   type NewsItem,
 } from "@/lib/news-api";
 import { cn } from "@/lib/utils";
+import {
+  fetchNewsListPage,
+  pickBestTranslation,
+  type NewsLocale,
+} from "@/lib/news-api";
 
 /* ─── Types ─────────────────────────────────────────────────────── */
 
 type NewsFormState = {
-  title: string;
-  subtitle: string;
-  description: string;
-  subDescription: string;
-  tags: string;
   dateTime: Date | null;
   isActive: boolean;
+  translations: {
+    en: { title: string; subtitle: string; description: string; subDescription: string };
+    ar: { title: string; subtitle: string; description: string; subDescription: string };
+  };
+  tagsByLocale: { en: string; ar: string };
 };
 
 type CreateFormErrors = Partial<
   Record<"title" | "description" | "date" | "tags" | "image", string>
 >;
 
+function emptyTranslations() {
+  return {
+    en: { title: "", subtitle: "", description: "", subDescription: "" },
+    ar: { title: "", subtitle: "", description: "", subDescription: "" },
+  };
+}
+
+function hasBothTranslationsRequired(
+  tr: ReturnType<typeof emptyTranslations>,
+  tagsByLocale: { en: string; ar: string }
+): boolean {
+  const locales: NewsLocale[] = ["en", "ar"];
+  return locales.every((loc) => {
+    const t = tr[loc];
+    const tags = parseCommaTags(tagsByLocale[loc]);
+    return (
+      t.title.trim().length > 0 &&
+      t.description.trim().length > 0 &&
+      tags.length > 0
+    );
+  });
+}
+
 const createNewsSchema = z.object({
-  title: z.string().trim().min(1, { message: "required" }),
-  description: z.string().trim().min(1, { message: "required" }),
   dateTime: z.date({ message: "required" }),
-  tags: z
-    .string()
-    .refine((v) => parseCommaTags(v).length > 0, { message: "required" }),
-  imageFile: z.instanceof(File, { message: "required" }),
+  imageFile: z
+    .instanceof(File, { message: "required" })
+    .refine((f) => f.size <= 5 * 1024 * 1024, { message: "maxSize" })
+    .refine(
+      (f) =>
+        ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(f.type),
+      { message: "badType" }
+    ),
 });
 
 function validateCreate(values: {
-  title: string;
-  description: string;
   dateTime: Date | null;
-  tags: string;
   imageFile: File | null;
 }): { ok: true } | { ok: false; errors: CreateFormErrors } {
   const parsed = createNewsSchema.safeParse({
-    title: values.title,
-    description: values.description,
     dateTime: values.dateTime ?? undefined,
-    tags: values.tags,
     imageFile: values.imageFile ?? undefined,
   });
 
@@ -109,11 +132,8 @@ function validateCreate(values: {
   const next: CreateFormErrors = {};
   for (const issue of parsed.error.issues) {
     const key = issue.path[0];
-    if (key === "title") next.title = "required";
-    if (key === "description") next.description = "required";
     if (key === "dateTime") next.date = "required";
-    if (key === "tags") next.tags = "required";
-    if (key === "imageFile") next.image = "required";
+    if (key === "imageFile") next.image = issue.message;
   }
   return { ok: false, errors: next };
 }
@@ -122,20 +142,7 @@ type ViewMode = "grid" | "list";
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 
-function parseNewsList(data: unknown): NewsItem[] {
-  if (Array.isArray(data))
-    return data.map((x) => normalizeNewsItem(x)).filter((x): x is NewsItem => !!x);
-  if (data && typeof data === "object") {
-    const o = data as Record<string, unknown>;
-    const list =
-      o.news ?? o.items ?? o.data ?? o.rows ?? o.results ?? o.refreshSessions;
-    if (Array.isArray(list))
-      return list.map((x) => normalizeNewsItem(x)).filter((x): x is NewsItem => !!x);
-    const single = normalizeNewsItem(data);
-    if (single) return [single];
-  }
-  return [];
-}
+// list parsing moved to `fetchNewsListPage` (pagination meta aware)
 
 function parseCommaTags(input: string): string[] {
   return input
@@ -222,13 +229,17 @@ function NewsCardGrid({
   locale: string;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const tr = pickBestTranslation(row, locale);
+  const title = tr?.title ?? "—";
+  const subtitle = tr?.subtitle ?? "";
+  const tags = tr?.tags ?? [];
   return (
     <Card className="group flex flex-col overflow-hidden border shadow-sm transition-shadow hover:shadow-md">
       <div className="relative h-40 w-full overflow-hidden bg-muted">
         {row.image ? (
           <img
             src={row.image}
-            alt={row.title}
+            alt={title}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             loading="lazy"
           />
@@ -245,25 +256,25 @@ function NewsCardGrid({
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex-1">
           <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
-            {row.title}
+            {title}
           </p>
-          {row.subtitle && (
+          {subtitle ? (
             <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-              {row.subtitle}
+              {subtitle}
             </p>
-          )}
+          ) : null}
         </div>
 
-        {(row.tags?.length ?? 0) > 0 && (
+        {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {(row.tags ?? []).slice(0, 3).map((tag) => (
+            {tags.slice(0, 3).map((tag) => (
               <Badge key={tag} variant="secondary" className="text-xs font-normal">
                 {tag}
               </Badge>
             ))}
-            {(row.tags?.length ?? 0) > 3 && (
+            {tags.length > 3 && (
               <Badge variant="outline" className="text-xs text-muted-foreground">
-                +{(row.tags?.length ?? 0) - 3}
+                +{tags.length - 3}
               </Badge>
             )}
           </div>
@@ -301,6 +312,9 @@ export function NewsPanel() {
   const locale = useLocale();
 
   const [rows, setRows] = useState<NewsItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [search, setSearch] = useState("");
@@ -308,59 +322,69 @@ export function NewsPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [createErrors, setCreateErrors] = useState<CreateFormErrors>({});
   const [form, setForm] = useState<NewsFormState>({
-    title: "",
-    subtitle: "",
-    description: "",
-    subDescription: "",
-    tags: "",
     dateTime: null,
     isActive: true,
+    translations: emptyTranslations(),
+    tagsByLocale: { en: "", ar: "" },
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const data = await fetchNewsList({ page: 1, limit: 50 });
-      setRows(parseNewsList(data));
+      const result = await fetchNewsListPage({ page, limit: 20 });
+      setRows(result.rows);
+      setTotal(result.meta.total);
+      setTotalPages(result.meta.pages);
     } catch (e) {
       toastApiError(e, t("loadError"));
       setRows([]);
+      setTotal(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
-  const filtered = rows.filter(
-    (r) =>
-      !search.trim() ||
-      r.title.toLowerCase().includes(search.toLowerCase()) ||
-      (r.subtitle ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = rows.filter((r) => {
+    if (!search.trim()) return true;
+    const tr = pickBestTranslation(r, locale);
+    const title = (tr?.title ?? "").toLowerCase();
+    const subtitle = (tr?.subtitle ?? "").toLowerCase();
+    return (
+      title.includes(search.toLowerCase()) || subtitle.includes(search.toLowerCase())
+    );
+  });
 
   const validation = validateCreate({
-    title: form.title,
-    description: form.description,
     dateTime: form.dateTime,
-    tags: form.tags,
     imageFile,
   });
 
   const submitDisabled = submitting || validation.ok === false;
 
   async function onCreate() {
-    if (validation.ok === false) {
+    const translationsOk = hasBothTranslationsRequired(form.translations, form.tagsByLocale);
+    if (validation.ok === false || !translationsOk) {
+      const vErrors = validation.ok === false ? validation.errors : {};
       setCreateErrors({
-        ...(validation.errors.title ? { title: `${t("fieldTitle")} is required` } : {}),
-        ...(validation.errors.description
-          ? { description: `${t("fieldDescription")} is required` }
+        ...(!translationsOk ? { title: t("translationsBothRequired") } : {}),
+        ...(vErrors.date ? { date: `${t("fieldDate")} is required` } : {}),
+        ...(vErrors.image
+          ? {
+              image:
+                vErrors.image === "maxSize"
+                  ? t("imageMaxSize")
+                  : vErrors.image === "badType"
+                    ? t("imageBadType")
+                    : `${t("fieldImage")} is required`,
+            }
           : {}),
-        ...(validation.errors.date ? { date: `${t("fieldDate")} is required` } : {}),
-        ...(validation.errors.tags ? { tags: `${t("fieldTags")} is required` } : {}),
-        ...(validation.errors.image ? { image: `${t("fieldImage")} is required` } : {}),
       });
       return;
     }
@@ -370,16 +394,25 @@ export function NewsPanel() {
     );
 
     const fd = new FormData();
-    fd.append("title", form.title.trim());
-    if (form.subtitle.trim()) fd.append("subtitle", form.subtitle.trim());
-    fd.append("description", form.description.trim());
-    if (form.subDescription.trim()) fd.append("subDescription", form.subDescription.trim());
-    if (parseCommaTags(form.tags).length > 0) {
-      fd.append("tags", form.tags.trim());
-    }
     fd.append("date", form.dateTime!.toISOString());
     fd.append("isActive", form.isActive ? "true" : "false");
     fd.append("image", imageFile!);
+    const payload: Record<string, unknown> = (["en", "ar"] as const).reduce(
+      (acc, loc) => {
+        const tt = form.translations[loc];
+        const tags = parseCommaTags(form.tagsByLocale[loc]);
+        acc[loc] = {
+          title: tt.title.trim(),
+          subtitle: tt.subtitle.trim(),
+          description: tt.description.trim(),
+          subDescription: tt.subDescription.trim(),
+          tags,
+        };
+        return acc;
+      },
+      {} as Record<string, unknown>
+    );
+    fd.append("translations", JSON.stringify(payload));
 
     setSubmitting(true);
     try {
@@ -388,13 +421,10 @@ export function NewsPanel() {
       setCreateOpen(false);
       setCreateErrors({});
       setForm({
-        title: "",
-        subtitle: "",
-        description: "",
-        subDescription: "",
-        tags: "",
         dateTime: null,
         isActive: true,
+        translations: emptyTranslations(),
+        tagsByLocale: { en: "", ar: "" },
       });
       setImageFile(null);
       await load();
@@ -450,7 +480,7 @@ export function NewsPanel() {
 
           {/* ── Stats ── */}
           <div className="grid grid-cols-3 gap-3">
-            <StatCard label={t("countLabel")} value={rows.length} loading={loading} />
+            <StatCard label={t("countLabel")} value={loading ? "…" : total} loading={loading} />
             <StatCard label={t("statusActive")} value={activeCount} loading={loading} />
             <StatCard label={t("statusInactive")} value={inactiveCount} loading={loading} />
           </div>
@@ -470,35 +500,67 @@ export function NewsPanel() {
                   />
                 </div>
 
-                {/* View mode toggle */}
-                <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
-                  {(["list", "grid"] as ViewMode[]).map((mode) => (
-                    <Tooltip key={mode}>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            onClick={() => setViewMode(mode)}
-                            className={cn(
-                              "rounded px-2 py-1 transition-all",
-                              viewMode === mode
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground"
-                            )}
-                          >
-                            {mode === "list" ? (
-                              <List className="size-4" />
-                            ) : (
-                              <LayoutGrid className="size-4" />
-                            )}
-                          </button>
-                        }
-                      />
-                      <TooltipContent>
-                        {mode === "list" ? t("viewModeList") : t("viewModeGrid")}
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Pagination */}
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="hidden text-xs font-normal text-muted-foreground sm:inline-flex"
+                    >
+                      {t("pageLabel")} {page} / {totalPages}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1"
+                      disabled={loading || page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      {t("prev")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1"
+                      disabled={loading || page >= totalPages}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      {t("next")}
+                    </Button>
+                  </div>
+
+                  {/* View mode toggle */}
+                  <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
+                    {(["list", "grid"] as ViewMode[]).map((mode) => (
+                      <Tooltip key={mode}>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              onClick={() => setViewMode(mode)}
+                              className={cn(
+                                "rounded px-2 py-1 transition-all",
+                                viewMode === mode
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              {mode === "list" ? (
+                                <List className="size-4" />
+                              ) : (
+                                <LayoutGrid className="size-4" />
+                              )}
+                            </button>
+                          }
+                        />
+                        <TooltipContent>
+                          {mode === "list" ? t("viewModeList") : t("viewModeGrid")}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -587,6 +649,12 @@ export function NewsPanel() {
                       <TableRow key={row.id} className="group">
                         {/* Title */}
                         <TableCell className="pl-6">
+                          {(() => {
+                            const tr = pickBestTranslation(row, locale);
+                            const title = (tr?.title?.trim() ? tr.title : "—");
+                            const subtitle = tr?.subtitle ?? "";
+                            const tags = tr?.tags ?? [];
+                            return (
                           <div className="flex items-center gap-3">
                             <div className="h-9 w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
                               {row.image ? (
@@ -604,15 +672,17 @@ export function NewsPanel() {
                             </div>
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-foreground">
-                                {row.title}
+                                {title}
                               </p>
-                              {row.subtitle && (
+                              {subtitle ? (
                                 <p className="truncate text-xs text-muted-foreground">
-                                  {row.subtitle}
+                                  {subtitle}
                                 </p>
-                              )}
+                              ) : null}
                             </div>
                           </div>
+                          );
+                          })()}
                         </TableCell>
 
                         {/* Status */}
@@ -630,25 +700,32 @@ export function NewsPanel() {
 
                         {/* Tags */}
                         <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {(row.tags ?? []).slice(0, 3).map((tag) => (
-                              <Badge
-                                key={tag}
-                                variant="secondary"
-                                className="text-xs font-normal"
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
-                            {(row.tags?.length ?? 0) > 3 && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs text-muted-foreground"
-                              >
-                                +{(row.tags?.length ?? 0) - 3}
-                              </Badge>
-                            )}
-                          </div>
+                          {(() => {
+                            const tr = pickBestTranslation(row, locale);
+                            const tags = tr?.tags ?? [];
+                            if (tags.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {tags.slice(0, 3).map((tag) => (
+                                  <Badge
+                                    key={tag}
+                                    variant="secondary"
+                                    className="text-xs font-normal"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                                {tags.length > 3 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs text-muted-foreground"
+                                  >
+                                    +{tags.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
 
                         {/* Action */}
@@ -694,129 +771,186 @@ export function NewsPanel() {
           <Separator />
 
           <div className="grid max-h-[58vh] gap-3.5 overflow-y-auto py-1 pr-1">
-            {/* Title */}
-            <div className="grid gap-1.5">
-              <Label
-                htmlFor="news-title"
-                className="flex items-center gap-1.5 text-sm font-medium"
-              >
-                <Text className="size-3 text-muted-foreground" aria-hidden />
-                {t("fieldTitle")} <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="news-title"
-                value={form.title}
-                onChange={(e) => {
-                  setForm((s) => ({ ...s, title: e.target.value }));
-                  setCreateErrors((er) => ({ ...er, title: undefined }));
-                }}
-                placeholder={t("placeholderTitle")}
-              />
-              {createErrors.title ? (
-                <p className="text-xs text-destructive">{createErrors.title}</p>
-              ) : null}
-            </div>
+            {createErrors.title ? (
+              <p className="text-xs text-destructive">{createErrors.title}</p>
+            ) : null}
 
-            {/* Subtitle */}
-            <div className="grid gap-1.5">
-              <Label
-                htmlFor="news-subtitle"
-                className="flex items-center gap-1.5 text-sm font-medium"
-              >
-                <FileText className="size-3 text-muted-foreground" aria-hidden />
-                {t("fieldSubtitle")}
-              </Label>
-              <Input
-                id="news-subtitle"
-                value={form.subtitle}
-                onChange={(e) => setForm((s) => ({ ...s, subtitle: e.target.value }))}
-                placeholder={t("placeholderSubtitle")}
-              />
-            </div>
-
-            {/* Description */}
-            <div className="grid gap-1.5">
-              <Label
-                htmlFor="news-description"
-                className="flex items-center gap-1.5 text-sm font-medium"
-              >
-                <FileText className="size-3 text-muted-foreground" aria-hidden />
-                {t("fieldDescription")}
-                <span className="text-destructive">*</span>
-              </Label>
-              <Textarea
-                id="news-description"
-                rows={3}
-                value={form.description}
-                onChange={(e) => {
-                  setForm((s) => ({ ...s, description: e.target.value }));
-                  setCreateErrors((er) => ({ ...er, description: undefined }));
-                }}
-                placeholder={t("placeholderDescription")}
-                className="resize-none"
-              />
-              {/* Clear error on edit */}
-              {createErrors.description ? (
-                <p className="text-xs text-destructive">{createErrors.description}</p>
-              ) : null}
-            </div>
-
-            {/* Sub-description */}
-            <div className="grid gap-1.5">
-              <Label
-                htmlFor="news-subDescription"
-                className="flex items-center gap-1.5 text-sm font-medium"
-              >
-                <FileText className="size-3 text-muted-foreground" aria-hidden />
-                {t("fieldSubDescription")}
-              </Label>
-              <Textarea
-                id="news-subDescription"
-                rows={2}
-                value={form.subDescription}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, subDescription: e.target.value }))
-                }
-                placeholder={t("placeholderSubDescription")}
-                className="resize-none"
-              />
-            </div>
-
-            {/* Tags + Date */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label
-                  htmlFor="news-tags"
-                  className="flex items-center gap-1.5 text-sm font-medium"
-                >
-                  <Tag className="size-3 text-muted-foreground" aria-hidden />
-                  {t("fieldTags")}
-                  <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="news-tags"
-                  placeholder={t("fieldTagsPlaceholder")}
-                  value={form.tags}
-                  onChange={(e) => {
-                    setForm((s) => ({ ...s, tags: e.target.value }));
-                    setCreateErrors((er) => ({ ...er, tags: undefined }));
-                  }}
-                />
-                {createErrors.tags ? (
-                  <p className="text-xs text-destructive">{createErrors.tags}</p>
-                ) : null}
+            {/* Translations + tags (required) */}
+            <div className="grid gap-2 rounded-lg border bg-muted/10 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("translationsLabel")}
+                </p>
+                <Badge variant="secondary" className="text-xs font-normal">
+                  {t("required")}
+                </Badge>
               </div>
-              
-              <NewsDateTimePicker
-                value={form.dateTime}
-                required={true}
-                onChange={(next) => {
-                  setForm((s) => ({ ...s, dateTime: next }));
-                  setCreateErrors((e) => ({ ...e, date: undefined }));
-                }}
-                error={createErrors.date}
-              />
+
+              <div className="grid grid-cols-1 gap-3">
+                {/* EN */}
+                <div className="grid gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">{t("langEn")}</p>
+                  <Input
+                    value={form.translations.en.title}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, title: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldTitle")} (${t("langEn")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    value={form.translations.en.subtitle}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, subtitle: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldSubtitle")} (${t("langEn")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Textarea
+                    rows={2}
+                    value={form.translations.en.description}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, description: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldDescription")} (${t("langEn")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Textarea
+                    rows={2}
+                    value={form.translations.en.subDescription}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          en: { ...s.translations.en, subDescription: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldSubDescription")} (${t("langEn")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Input
+                    value={form.tagsByLocale.en}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        tagsByLocale: { ...s.tagsByLocale, en: e.target.value },
+                      }))
+                    }
+                    placeholder={`${t("fieldTags")} (${t("langEn")})`}
+                    className="h-8 text-sm"
+                  />
+                </div>
+
+                {/* AR */}
+                <div className="grid gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">{t("langAr")}</p>
+                  <Input
+                    dir="rtl"
+                    value={form.translations.ar.title}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, title: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldTitle")} (${t("langAr")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    dir="rtl"
+                    value={form.translations.ar.subtitle}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, subtitle: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldSubtitle")} (${t("langAr")})`}
+                    className="h-8 text-sm"
+                  />
+                  <Textarea
+                    dir="rtl"
+                    rows={2}
+                    value={form.translations.ar.description}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, description: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldDescription")} (${t("langAr")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Textarea
+                    dir="rtl"
+                    rows={2}
+                    value={form.translations.ar.subDescription}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        translations: {
+                          ...s.translations,
+                          ar: { ...s.translations.ar, subDescription: e.target.value },
+                        },
+                      }))
+                    }
+                    placeholder={`${t("fieldSubDescription")} (${t("langAr")})`}
+                    className="resize-none text-sm"
+                  />
+                  <Input
+                    dir="rtl"
+                    value={form.tagsByLocale.ar}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        tagsByLocale: { ...s.tagsByLocale, ar: e.target.value },
+                      }))
+                    }
+                    placeholder={`${t("fieldTags")} (${t("langAr")})`}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
             </div>
+
+            <NewsDateTimePicker
+              value={form.dateTime}
+              required={true}
+              onChange={(next) => {
+                setForm((s) => ({ ...s, dateTime: next }));
+                setCreateErrors((e) => ({ ...e, date: undefined }));
+              }}
+              error={createErrors.date}
+            />
 
             {/* Active toggle */}
             <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5">

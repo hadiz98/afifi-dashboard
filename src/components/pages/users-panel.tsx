@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, readApiData } from "@/lib/api";
@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { parseUserRoles } from "@/lib/user";
+import { cn } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
 
@@ -122,22 +123,41 @@ export function UsersPanel() {
 
   return (
     <div className="mx-auto w-full max-w-5xl p-4 md:p-8">
-      <Card>
-        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle>{t("title")}</CardTitle>
-            <CardDescription>{t("description")}</CardDescription>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">
-              {t("total")}: {loading ? "…" : bundle.total}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              {t("page")} {page} / {bundle.totalPages}
-            </span>
+      <Card className="overflow-hidden border shadow-sm">
+        <CardHeader className="border-b bg-card px-6 py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex gap-3">
+              <div
+                className={cn(
+                  "flex size-11 shrink-0 items-center justify-center rounded-xl border bg-muted/50",
+                  "text-muted-foreground"
+                )}
+              >
+                <Users className="size-5" aria-hidden />
+              </div>
+              <div>
+                <CardTitle className="text-xl font-semibold tracking-tight">
+                  {t("title")}
+                </CardTitle>
+                <CardDescription className="mt-1 max-w-xl text-sm">
+                  {t("description")}
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="font-normal">
+                {t("total")}: {loading ? "…" : bundle.total}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="font-normal text-muted-foreground"
+              >
+                {t("page")} {page} / {bundle.totalPages}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-6">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"

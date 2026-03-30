@@ -456,9 +456,9 @@ export function NewsPanel() {
           </div>
 
           {/* ── Main Card ── */}
-          <Card className="bg-card shadow-sm">
+          <Card className="overflow-hidden border shadow-sm">
             {/* Toolbar */}
-            <CardHeader className="border-b px-6 py-4">
+            <CardHeader className="border-b bg-card px-6 py-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="relative w-full max-w-xs">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />

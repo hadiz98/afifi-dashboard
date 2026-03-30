@@ -253,7 +253,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
       <Card className="overflow-hidden border shadow-sm">
         
         {/* ── Header ─────────────────────────────────────────── */}
-        <CardHeader className="pb-0">
+        <CardHeader className="border-b bg-card px-6 py-5">
           
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 
@@ -297,9 +297,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
           </div>
         </CardHeader>
 
-        <Separator className="mt-4" />
-
-        <CardContent className="space-y-6 pt-5">
+        <CardContent className="space-y-6 p-6">
           {news.image ? (
             <div className="flex justify-start">
               {!imageLoadFailed ? (

@@ -185,9 +185,18 @@
     "empty": "لا يوجد خبر",
     "back": "العودة للأخبار",
     "edit": "تعديل",
+    "delete": "حذف",
+    "deleteConfirmTitle": "حذف هذا المقال؟",
+    "deleteConfirmDescription": "لا يمكن التراجع عن هذا الإجراء. سيُزال المقال من قائمة الأخبار.",
+    "deleteConfirm": "حذف المقال",
+    "deleting": "جارٍ الحذف…",
+    "deleteSuccess": "تم حذف المقال",
+    "deleteError": "تعذر حذف المقال",
     "dialogEditTitle": "تعديل الخبر",
     "dialogEditDescription": "حدّث البيانات ثم احفظ.",
     "tags": "الوسوم",
+    "imageAlt": "صورة الخبر",
+    "imageBroken": "تعذر تحميل الصورة",
     "imageOptionalHint": "يمكن تركها فارغة إذا لم ترغب بتغيير الصورة.",
     "update": "حفظ التحديث"
   }

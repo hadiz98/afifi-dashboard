@@ -185,9 +185,18 @@
     "empty": "No news item found.",
     "back": "Back to news",
     "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete this article?",
+    "deleteConfirmDescription": "This action cannot be undone. The article will be removed from the news list.",
+    "deleteConfirm": "Delete article",
+    "deleting": "Deleting…",
+    "deleteSuccess": "Article deleted",
+    "deleteError": "Could not delete article",
     "dialogEditTitle": "Edit news",
     "dialogEditDescription": "Update the fields and save changes.",
     "tags": "Tags",
+    "imageAlt": "News image",
+    "imageBroken": "Image could not be loaded",
     "imageOptionalHint": "Optional: leave empty to keep the current image.",
     "update": "Save changes"
   }

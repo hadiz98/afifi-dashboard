@@ -52,6 +52,7 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  Text,
   Upload,
 } from "lucide-react";
 import {
@@ -678,18 +679,28 @@ export function NewsPanel() {
       {/* ── Create Dialog ── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Newspaper className="size-4 text-muted-foreground" />
+          <DialogHeader className="pb-1">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <Newspaper className="size-3.5 text-muted-foreground" aria-hidden />
+              </div>
               {t("dialogCreateTitle")}
             </DialogTitle>
-            <DialogDescription>{t("dialogCreateDescription")}</DialogDescription>
+            <DialogDescription className="text-xs">
+              {t("dialogCreateDescription")}
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="grid max-h-[60vh] gap-4 overflow-y-auto py-1 pr-1">
+          <Separator />
+
+          <div className="grid max-h-[58vh] gap-3.5 overflow-y-auto py-1 pr-1">
             {/* Title */}
             <div className="grid gap-1.5">
-              <Label htmlFor="news-title">
+              <Label
+                htmlFor="news-title"
+                className="flex items-center gap-1.5 text-sm font-medium"
+              >
+                <Text className="size-3 text-muted-foreground" aria-hidden />
                 {t("fieldTitle")} <span className="text-destructive">*</span>
               </Label>
               <Input
@@ -708,7 +719,13 @@ export function NewsPanel() {
 
             {/* Subtitle */}
             <div className="grid gap-1.5">
-              <Label htmlFor="news-subtitle">{t("fieldSubtitle")}</Label>
+              <Label
+                htmlFor="news-subtitle"
+                className="flex items-center gap-1.5 text-sm font-medium"
+              >
+                <FileText className="size-3 text-muted-foreground" aria-hidden />
+                {t("fieldSubtitle")}
+              </Label>
               <Input
                 id="news-subtitle"
                 value={form.subtitle}
@@ -719,7 +736,14 @@ export function NewsPanel() {
 
             {/* Description */}
             <div className="grid gap-1.5">
-              <Label htmlFor="news-description">{t("fieldDescription")}<span className="text-destructive">*</span></Label>
+              <Label
+                htmlFor="news-description"
+                className="flex items-center gap-1.5 text-sm font-medium"
+              >
+                <FileText className="size-3 text-muted-foreground" aria-hidden />
+                {t("fieldDescription")}
+                <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="news-description"
                 rows={3}
@@ -735,14 +759,17 @@ export function NewsPanel() {
               {createErrors.description ? (
                 <p className="text-xs text-destructive">{createErrors.description}</p>
               ) : null}
-              {createErrors.description ? (
-                <p className="text-xs text-destructive">{createErrors.description}</p>
-              ) : null}
             </div>
 
             {/* Sub-description */}
             <div className="grid gap-1.5">
-              <Label htmlFor="news-subDescription">{t("fieldSubDescription")}</Label>
+              <Label
+                htmlFor="news-subDescription"
+                className="flex items-center gap-1.5 text-sm font-medium"
+              >
+                <FileText className="size-3 text-muted-foreground" aria-hidden />
+                {t("fieldSubDescription")}
+              </Label>
               <Textarea
                 id="news-subDescription"
                 rows={2}
@@ -758,9 +785,13 @@ export function NewsPanel() {
             {/* Tags + Date */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
-                <Label htmlFor="news-tags" className="flex items-center gap-1.5">
-                  <Tag className="size-3 text-muted-foreground" />
-                  {t("fieldTags")}<span className="text-destructive">*</span>
+                <Label
+                  htmlFor="news-tags"
+                  className="flex items-center gap-1.5 text-sm font-medium"
+                >
+                  <Tag className="size-3 text-muted-foreground" aria-hidden />
+                  {t("fieldTags")}
+                  <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="news-tags"
@@ -807,7 +838,8 @@ export function NewsPanel() {
 
             {/* Image upload */}
             <div className="grid gap-1.5">
-              <Label>
+              <Label className="flex items-center gap-1.5 text-sm font-medium">
+                <ImageIcon className="size-3 text-muted-foreground" aria-hidden />
                 {t("fieldImage")} <span className="text-destructive">*</span>
               </Label>
               <label
@@ -857,7 +889,9 @@ export function NewsPanel() {
             </div>
           </div>
 
-          <DialogFooter>
+          <Separator />
+
+          <DialogFooter className="gap-2 pt-1 sm:gap-2">
             <Button
               variant="outline"
               onClick={() => setCreateOpen(false)}

@@ -159,9 +159,6 @@ export async function updateNews(id: string, form: FormData): Promise<NewsItem> 
 
 export async function deleteNews(id: string): Promise<void> {
   const res = await apiFetch(`/api/news/${encodeURIComponent(id)}`, { method: "DELETE" });
-  // Soft delete might return empty.
-  if (!res.ok) {
-    await readApiData<unknown>(res).catch(() => undefined);
-  }
+  await readApiData<unknown>(res);
 }
 

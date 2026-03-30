@@ -1,17 +1,28 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/toast-api-error";
+import {
+  ArrowLeft,
+  CalendarDays,
+  FileText,
+  Image as ImageIcon,
+  Newspaper,
+  Pencil,
+  Save,
+  Tag,
+  Text,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -25,9 +36,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link } from "@/i18n/navigation";
-import { fetchNewsById, updateNews } from "@/lib/news-api";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Link, useRouter } from "@/i18n/navigation";
+import { NewsDateTimePicker } from "@/components/news-date-time-picker";
+import { deleteNews, fetchNewsById, updateNews } from "@/lib/news-api";
 import type { NewsItem } from "@/lib/news-api";
+import { cn } from "@/lib/utils";
 
 type EditFormState = {
   title: string;
@@ -35,24 +50,15 @@ type EditFormState = {
   description: string;
   subDescription: string;
   tags: string;
-  date: string;
+  dateTime: Date | null;
   isActive: boolean;
 };
 
-function toDateTimeLocalValue(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  // Convert to local datetime-local format: YYYY-MM-DDTHH:mm
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function toIsoFromDateTimeLocal(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(value);
+function safeDate(v: string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
+  return d;
 }
 
 function parseTags(tags: string[] | null | undefined): string {
@@ -68,13 +74,17 @@ export function NewsDetailsPanel({ id }: { id: string }) {
   const t = useTranslations("NewsDetailsPage");
   const tCommon = useTranslations("NewsPage");
   const locale = useLocale();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [news, setNews] = useState<NewsItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [form, setForm] = useState<EditFormState>({
     title: "",
@@ -82,17 +92,26 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     description: "",
     subDescription: "",
     tags: "",
-    date: "",
+    dateTime: null,
     isActive: true,
   });
 
   function renderStatusBadge(isActive?: boolean) {
     if (isActive === false) {
       return (
-        <Badge variant="outline">{tCommon("statusInactive")}</Badge>
+        <Badge
+          variant="outline"
+          className="rounded-full border-muted-foreground/30 px-2.5 py-0.5 text-xs font-normal text-muted-foreground"
+        >
+          {tCommon("statusInactive")}
+        </Badge>
       );
     }
-    return <Badge>{tCommon("statusActive")}</Badge>;
+    return (
+      <Badge className="rounded-full border-emerald-600/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-normal text-emerald-700 dark:text-emerald-400">
+        {tCommon("statusActive")}
+      </Badge>
+    );
   }
 
   async function load() {
@@ -107,7 +126,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
         description: safeString(item.description),
         subDescription: safeString(item.subDescription),
         tags: parseTags(item.tags),
-        date: toDateTimeLocalValue(item.date),
+        dateTime: safeDate(item.date),
         isActive: item.isActive !== false,
       });
     } catch (e) {
@@ -123,6 +142,10 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [news?.id, news?.image]);
 
   function formatDate(value?: string | null): string {
     if (!value) return "—";
@@ -146,10 +169,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
       if (form.subDescription.trim())
         fd.append("subDescription", form.subDescription.trim());
       if (form.tags.trim()) fd.append("tags", form.tags.trim());
-
-      const iso = toIsoFromDateTimeLocal(form.date);
-      if (iso) fd.append("date", iso);
-
+      if (form.dateTime) fd.append("date", form.dateTime.toISOString());
       fd.append("isActive", form.isActive ? "true" : "false");
       if (imageFile) fd.append("image", imageFile);
 
@@ -165,19 +185,39 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     }
   }
 
+  async function onDelete() {
+    if (!news) return;
+    setDeleting(true);
+    try {
+      await deleteNews(id);
+      toast.success(t("deleteSuccess"));
+      setDeleteOpen(false);
+      router.push("/news");
+    } catch (e) {
+      toastApiError(e, t("deleteError"));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-4xl p-4 md:p-8">
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="mt-2 h-4 w-80" />
+      <div className="mx-auto w-full max-w-3xl px-4 py-8">
+        <Card className="overflow-hidden border shadow-sm">
+          <CardHeader className="pb-4">
+            <Skeleton className="h-7 w-56" />
+            <Skeleton className="mt-1.5 h-4 w-72" />
+            <div className="mt-3 flex gap-2">
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <Skeleton className="h-64 w-full" />
-            <div className="mt-4 space-y-2">
-              <Skeleton className="h-4 w-[90%]" />
-              <Skeleton className="h-4 w-[70%]" />
+          <CardContent className="space-y-4 pt-0">
+            <Skeleton className="h-44 w-full rounded-lg" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-[85%]" />
+              <Skeleton className="h-4 w-[65%]" />
             </div>
           </CardContent>
         </Card>
@@ -187,65 +227,141 @@ export function NewsDetailsPanel({ id }: { id: string }) {
 
   if (!news || error) {
     return (
-      <div className="mx-auto w-full max-w-4xl p-4 md:p-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-8">
         <p className="text-sm text-muted-foreground">{t("empty")}</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-4 md:p-8">
-      <Card>
-        <CardHeader className="gap-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle className="text-2xl">{news.title}</CardTitle>
-              {news.subtitle ? (
-                <CardDescription className="mt-1">{news.subtitle}</CardDescription>
-              ) : null}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 md:px-8">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 gap-1.5 px-2.5 text-xs"
+        nativeButton={false}
+        render={
+          <Link
+            href="/news"
+            className="flex items-center gap-1.5 rtl:flex-row-reverse"
+          >
+            <ArrowLeft className="size-3.5 rtl:rotate-180" aria-hidden />
+            {t("back")}
+          </Link>
+        }
+      />
+      <Card className="overflow-hidden border shadow-sm">
+        
+        {/* ── Header ─────────────────────────────────────────── */}
+        <CardHeader className="pb-0">
+          
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+            {/* Left: meta */}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
                 {renderStatusBadge(news.isActive)}
-                <Badge variant="secondary">{formatDate(news.date)}</Badge>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <CalendarDays className="size-3" />
+                  {formatDate(news.date)}
+                </span>
               </div>
+              <h1 className="mt-2 text-xl font-semibold leading-snug tracking-tight">
+                {news.title}
+              </h1>
+              {news.subtitle ? (
+                <p className="mt-1 text-sm text-muted-foreground">{news.subtitle}</p>
+              ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+
+            {/* Right: actions */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <Button
-                variant="outline"
+                variant="destructive"
                 size="sm"
-                nativeButton={false}
-                render={<Link href="/news">{t("back")}</Link>}
-              />
-              <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+                className="h-8 gap-1.5 px-3 text-xs"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-3.5" />
+                {t("delete")}
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 px-3 text-xs"
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="size-3.5" />
                 {t("edit")}
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+
+        <Separator className="mt-4" />
+
+        <CardContent className="space-y-6 pt-5">
           {news.image ? (
-            <div className="relative w-full overflow-hidden rounded-lg border bg-muted">
-              <img
-                src={news.image}
-                alt=""
-                className="h-auto w-full object-cover"
-                loading="lazy"
-              />
+            <div className="flex justify-start">
+              {!imageLoadFailed ? (
+                <div className="relative w-full max-w-xl overflow-hidden rounded-lg border bg-muted">
+                  <div className="relative aspect-video w-full">
+                    <img
+                      src={news.image}
+                      alt={
+                        news.title
+                          ? `${t("imageAlt")}: ${news.title}`
+                          : t("imageAlt")
+                      }
+                      className="absolute inset-0 h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      onError={() => setImageLoadFailed(true)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div
+                  role="img"
+                  aria-label={t("imageBroken")}
+                  className="flex aspect-video w-full max-w-xl flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/40 px-6 text-center"
+                >
+                  <ImageIcon className="size-10 text-muted-foreground/50" aria-hidden />
+                  <p className="text-sm text-muted-foreground">{t("imageBroken")}</p>
+                </div>
+              )}
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            {news.description ? <p className="whitespace-pre-wrap">{news.description}</p> : null}
-            {news.subDescription ? (
-              <p className="text-sm text-muted-foreground">{news.subDescription}</p>
-            ) : null}
-          </div>
+          {/* Body text */}
+          {(news.description || news.subDescription) ? (
+            <div className="space-y-3">
+              {news.description ? (
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {news.description}
+                </p>
+              ) : null}
+              {news.subDescription ? (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {news.subDescription}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
+          {/* Tags */}
           {news.tags && news.tags.length > 0 ? (
             <div>
-              <div className="mb-2 text-sm font-medium">{t("tags")}</div>
-              <div className="flex flex-wrap gap-2">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <Tag className="size-3" />
+                {t("tags")}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
                 {news.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary">
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="rounded-full px-2.5 py-0.5 text-xs font-normal"
+                  >
                     {tag}
                   </Badge>
                 ))}
@@ -255,115 +371,221 @@ export function NewsDetailsPanel({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* ── Edit Dialog ────────────────────────────────────── */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("dialogEditTitle")}</DialogTitle>
-            <DialogDescription>{t("dialogEditDescription")}</DialogDescription>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <Newspaper className="size-3.5 text-muted-foreground" />
+              </div>
+              {t("dialogEditTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {t("dialogEditDescription")}
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 px-6 pb-2">
-            <div className="grid gap-2">
-              <Label htmlFor="news-edit-title">{tCommon("fieldTitle")}</Label>
+          <Separator />
+
+          <div className="grid max-h-[58vh] gap-3.5 overflow-y-auto py-1 pr-1">
+
+            {/* Title */}
+            <FieldGroup
+              id="news-edit-title"
+              icon={<Text className="size-3" />}
+              label={tCommon("fieldTitle")}
+              required
+            >
               <Input
                 id="news-edit-title"
                 value={form.title}
                 onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
+                placeholder={tCommon("placeholderTitle")}
+                className="h-8 text-sm"
               />
-            </div>
+            </FieldGroup>
 
-            <div className="grid gap-2">
-              <Label htmlFor="news-edit-subtitle">{tCommon("fieldSubtitle")}</Label>
+            {/* Subtitle */}
+            <FieldGroup
+              id="news-edit-subtitle"
+              icon={<FileText className="size-3" />}
+              label={tCommon("fieldSubtitle")}
+            >
               <Input
                 id="news-edit-subtitle"
                 value={form.subtitle}
                 onChange={(e) => setForm((s) => ({ ...s, subtitle: e.target.value }))}
+                placeholder={tCommon("placeholderSubtitle")}
+                className="h-8 text-sm"
               />
-            </div>
+            </FieldGroup>
 
-            <div className="grid gap-2">
-              <Label htmlFor="news-edit-description">{tCommon("fieldDescription")}</Label>
+            {/* Description */}
+            <FieldGroup
+              id="news-edit-description"
+              icon={<FileText className="size-3" />}
+              label={tCommon("fieldDescription")}
+            >
               <Textarea
                 id="news-edit-description"
+                rows={3}
                 value={form.description}
                 onChange={(e) =>
                   setForm((s) => ({ ...s, description: e.target.value }))
                 }
+                placeholder={tCommon("placeholderDescription")}
+                className="resize-none text-sm"
               />
-            </div>
+            </FieldGroup>
 
-            <div className="grid gap-2">
-              <Label htmlFor="news-edit-subDescription">{tCommon("fieldSubDescription")}</Label>
+            {/* Sub-description */}
+            <FieldGroup
+              id="news-edit-subDescription"
+              icon={<FileText className="size-3" />}
+              label={tCommon("fieldSubDescription")}
+            >
               <Textarea
                 id="news-edit-subDescription"
+                rows={2}
                 value={form.subDescription}
                 onChange={(e) =>
                   setForm((s) => ({ ...s, subDescription: e.target.value }))
                 }
+                placeholder={tCommon("placeholderSubDescription")}
+                className="resize-none text-sm"
               />
-            </div>
+            </FieldGroup>
 
-            <div className="grid gap-2">
-              <Label htmlFor="news-edit-tags">{tCommon("fieldTags")}</Label>
-              <Input
+            {/* Tags + Date in a 2-col grid */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              <FieldGroup
                 id="news-edit-tags"
-                placeholder={tCommon("fieldTagsPlaceholder")}
-                value={form.tags}
-                onChange={(e) => setForm((s) => ({ ...s, tags: e.target.value }))}
+                icon={<Tag className="size-3" />}
+                label={tCommon("fieldTags")}
+              >
+                <Input
+                  id="news-edit-tags"
+                  placeholder={tCommon("fieldTagsPlaceholder")}
+                  value={form.tags}
+                  onChange={(e) => setForm((s) => ({ ...s, tags: e.target.value }))}
+                  className="h-8 text-sm"
+                />
+              </FieldGroup>
+
+              <NewsDateTimePicker
+                value={form.dateTime}
+                onChange={(next) => setForm((s) => ({ ...s, dateTime: next }))}
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="news-edit-date">{tCommon("fieldDate")}</Label>
-              <Input
-                id="news-edit-date"
-                type="datetime-local"
-                value={form.date}
-                onChange={(e) => setForm((s) => ({ ...s, date: e.target.value }))}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
+            {/* Active toggle */}
+            <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <Label
+                  htmlFor="news-edit-isActive"
+                  className="cursor-pointer text-sm font-medium"
+                >
+                  {tCommon("fieldIsActive")}
+                </Label>
+                <Badge
+                  variant={form.isActive ? "secondary" : "outline"}
+                  className={cn(
+                    "rounded-full px-2 py-0 text-xs font-normal",
+                    form.isActive
+                      ? "border-emerald-600/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      : "border-muted-foreground/20 text-muted-foreground"
+                  )}
+                >
+                  {form.isActive ? tCommon("statusActive") : tCommon("statusInactive")}
+                </Badge>
+              </div>
+              <Switch
                 id="news-edit-isActive"
-                type="checkbox"
                 checked={form.isActive}
-                onChange={(e) => setForm((s) => ({ ...s, isActive: e.target.checked }))}
-                className="h-4 w-4 rounded border-input"
+                onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))}
               />
-              <Label htmlFor="news-edit-isActive">{tCommon("fieldIsActive")}</Label>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="news-edit-image">{tCommon("fieldImage")}</Label>
+            {/* Image upload */}
+            <FieldGroup
+              id="news-edit-image"
+              icon={<ImageIcon className="size-3" />}
+              label={tCommon("fieldImage")}
+              hint={t("imageOptionalHint")}
+            >
               <Input
                 id="news-edit-image"
                 type="file"
                 accept="image/*"
+                className="h-8 cursor-pointer text-xs"
                 onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
               />
-              <div className="text-xs text-muted-foreground">
-                {t("imageOptionalHint")}
-              </div>
-            </div>
+            </FieldGroup>
           </div>
 
-          <DialogFooter>
+          <Separator />
+
+          <DialogFooter className="gap-2 pt-1 sm:gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditOpen(false)}
+              disabled={submitting}
+              className="h-8 gap-1.5 px-3 text-xs"
+            >
+              <X className="size-3.5" />
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void onUpdate()}
+              disabled={submitting || !form.title.trim()}
+              className="h-8 gap-1.5 px-3 text-xs"
+            >
+              <Save className="size-3.5" />
+              {t("update")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10">
+                <Trash2 className="size-3.5 text-destructive" aria-hidden />
+              </div>
+              {t("deleteConfirmTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {t("deleteConfirmDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2 sm:gap-2">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setEditOpen(false)}
-              disabled={submitting}
+              size="sm"
+              className="h-8 px-3 text-xs"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleting}
             >
               {tCommon("cancel")}
             </Button>
             <Button
               type="button"
-              onClick={() => void onUpdate()}
-              disabled={submitting || !form.title.trim()}
-              className="gap-2"
+              variant="destructive"
+              size="sm"
+              className="h-8 gap-1.5 px-3 text-xs"
+              onClick={() => void onDelete()}
+              disabled={deleting}
             >
-              {t("update")}
+              <Trash2 className="size-3.5" />
+              {deleting ? t("deleting") : t("deleteConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -372,3 +594,34 @@ export function NewsDetailsPanel({ id }: { id: string }) {
   );
 }
 
+/* ── Small helper: labeled field group ──────────────────── */
+function FieldGroup({
+  id,
+  icon,
+  label,
+  required,
+  hint,
+  children,
+}: {
+  id: string;
+  icon: ReactNode;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <Label
+        htmlFor={id}
+        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+      >
+        {icon}
+        {label}
+        {required && <span className="text-destructive">*</span>}
+      </Label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}

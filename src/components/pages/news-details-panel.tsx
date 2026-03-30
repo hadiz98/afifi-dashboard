@@ -209,9 +209,12 @@ export function NewsDetailsPanel({ id }: { id: string }) {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/news">{t("back")}</Link>
-              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link href="/news">{t("back")}</Link>}
+              />
               <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
                 {t("edit")}
               </Button>

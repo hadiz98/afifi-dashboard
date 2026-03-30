@@ -30,12 +30,16 @@ function buildUrl(path: string): string {
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshAccessToken(): Promise<boolean> {
+  // De-duplicate concurrent refresh calls — all callers share one in-flight promise.
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
     try {
       const refreshToken = getRefreshToken();
-      if (!refreshToken) return false;
+      if (!refreshToken) {
+        console.warn("[auth] No refresh token available — cannot refresh.");
+        return false;
+      }
 
       const res = await fetch(buildUrl("/api/auth/refresh"), {
         method: "POST",
@@ -43,28 +47,48 @@ async function refreshAccessToken(): Promise<boolean> {
         body: JSON.stringify({ refreshToken }),
       });
 
+      // Log the raw response for debugging without swallowing it.
       let body: unknown = null;
       try {
         body = await res.json();
       } catch {
-        body = null;
+        console.warn("[auth] Refresh response was not valid JSON.");
+        return false;
       }
 
-      if (!res.ok || !body || typeof body !== "object") {
+      if (!res.ok) {
+        console.warn("[auth] Refresh request failed with status", res.status, body);
+        return false;
+      }
+
+      if (!body || typeof body !== "object") {
+        console.warn("[auth] Refresh response body is empty or not an object:", body);
         return false;
       }
 
       const record = body as { success?: boolean; data?: unknown };
-      if (record.success === false) return false;
+
+      // Explicit failure flag from the server.
+      if (record.success === false) {
+        console.warn("[auth] Server returned success=false on refresh:", body);
+        return false;
+      }
 
       // Support both:
-      // - { success: true, data: { accessToken, refreshToken, ... } }
-      // - { accessToken, refreshToken, ... }
+      //   { success: true, data: { accessToken, refreshToken, ... } }
+      //   { accessToken, refreshToken, ... }
       const payload =
         "data" in record && record.data !== undefined ? record.data : body;
 
       const bundle = normalizeAuthBundle(payload);
-      if (!bundle) return false;
+      if (!bundle) {
+        // Log the raw payload so you can fix normalizeAuthBundle if needed.
+        console.warn(
+          "[auth] normalizeAuthBundle returned null — the server shape may not be handled. Payload:",
+          payload
+        );
+        return false;
+      }
 
       setAuthSession(
         {
@@ -76,10 +100,14 @@ async function refreshAccessToken(): Promise<boolean> {
         },
         { fromRefresh: true }
       );
+
+      console.info("[auth] Token refreshed successfully.");
       return true;
-    } catch {
+    } catch (err) {
+      console.error("[auth] Unexpected error during token refresh:", err);
       return false;
     } finally {
+      // Always clear so the next call can try again.
       refreshPromise = null;
     }
   })();
@@ -88,6 +116,7 @@ async function refreshAccessToken(): Promise<boolean> {
 }
 
 function authFailure(): void {
+  console.warn("[auth] Auth failure — clearing session and redirecting to login.");
   clearAuthSession();
   redirectToLogin();
 }
@@ -129,27 +158,33 @@ export async function apiFetch(
     const isUrlSearchParams =
       typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams;
 
-    // Only auto-set JSON content-type when the caller is sending JSON.
-    // For multipart/form-data (news image upload), we must NOT set it.
     if (!headers.has("Content-Type") && body && !isFormData && !isUrlSearchParams) {
       headers.set("Content-Type", "application/json");
     }
+
     if (!skipAuth) {
-      // If we have a client-side expiry hint, refresh *before* the request
-      // so the UI doesn't first hit a 401 and then recover.
       if (typeof window !== "undefined") {
         const expiresAtMs = getAccessTokenExpiresAtMs();
-        const shouldRefresh =
+        const isExpiredOrExpiringSoon =
           typeof expiresAtMs === "number" &&
           Number.isFinite(expiresAtMs) &&
           Date.now() >= expiresAtMs - 5_000;
-        if (shouldRefresh) {
+
+        if (isExpiredOrExpiringSoon) {
+          // BUG FIX: Previously this block was empty on failure, letting
+          // the request fire with a known-expired token and causing a 401
+          // that then triggered authFailure(). Now we eagerly refresh and
+          // only proceed if it succeeded.
           const refreshed = await refreshAccessToken();
           if (!refreshed) {
-            authFailure();
+            // Refresh failed proactively — no point sending the request.
+            // Fall through and let the 401 handler below decide (it will
+            // try once more before calling authFailure).
+            console.warn("[auth] Proactive refresh failed; request will likely 401.");
           }
         }
       }
+
       const token = getAccessToken();
       if (token) {
         headers.set("Authorization", `Bearer ${token}`);
@@ -165,6 +200,7 @@ export async function apiFetch(
 
   let res = await doFetch();
 
+  // If we got a 401 and haven't already retried, attempt one refresh+retry.
   if (
     res.status === 401 &&
     !skipRefreshRetry &&
@@ -174,8 +210,10 @@ export async function apiFetch(
   ) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
+      // Retry the original request with the new token.
       res = await doFetch();
     } else {
+      // Both refresh attempts failed — the session is genuinely dead.
       authFailure();
       throw new ApiError("Session expired", { statusCode: 401 });
     }

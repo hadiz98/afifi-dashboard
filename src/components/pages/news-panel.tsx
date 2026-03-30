@@ -234,6 +234,7 @@ function NewsCardGrid({
             variant="ghost"
             size="sm"
             className="h-7 gap-1 px-2 text-xs"
+            nativeButton={false}
             render={
               <Link href={`/news/${encodeURIComponent(row.id)}`}>
                 {t("view")}
@@ -400,24 +401,26 @@ export function NewsPanel() {
                 <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
                   {(["list", "grid"] as ViewMode[]).map((mode) => (
                     <Tooltip key={mode}>
-                      <TooltipTrigger>
-                        <button
-                          type="button"
-                          onClick={() => setViewMode(mode)}
-                          className={cn(
-                            "rounded px-2 py-1 transition-all",
-                            viewMode === mode
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {mode === "list" ? (
-                            <List className="size-4" />
-                          ) : (
-                            <LayoutGrid className="size-4" />
-                          )}
-                        </button>
-                      </TooltipTrigger>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            onClick={() => setViewMode(mode)}
+                            className={cn(
+                              "rounded px-2 py-1 transition-all",
+                              viewMode === mode
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {mode === "list" ? (
+                              <List className="size-4" />
+                            ) : (
+                              <LayoutGrid className="size-4" />
+                            )}
+                          </button>
+                        }
+                      />
                       <TooltipContent>
                         {mode === "list" ? "List view" : "Grid view"}
                       </TooltipContent>
@@ -581,6 +584,7 @@ export function NewsPanel() {
                             variant="outline"
                             size="sm"
                             className="h-7 gap-1 px-2 text-xs"
+                            nativeButton={false}
                             render={
                               <Link href={`/news/${encodeURIComponent(row.id)}`}>
                                 {t("view")}

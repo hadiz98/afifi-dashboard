@@ -230,7 +230,8 @@ export function NewsDetailsPanel({ id }: { id: string }) {
       setUpdateError(null);
       const fd = new FormData();
       if (form.dateTime) fd.append("date", form.dateTime.toISOString());
-      fd.append("isActive", form.isActive ? "true" : "false");
+      // Backend accepts boolean-like: true/false/1/0 — use 1/0 for consistency.
+      fd.append("isActive", form.isActive ? "1" : "0");
       if (imageFile) fd.append("image", imageFile);
       const payload: Record<string, unknown> = (["en", "ar"] as const).reduce(
         (acc, loc) => {

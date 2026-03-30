@@ -462,7 +462,7 @@ export function NewsPanel() {
                 <div className="relative w-full max-w-xs">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Search articles…"
+                    placeholder={t("searchPlaceholder")}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="h-8 pl-8 text-sm"
@@ -494,7 +494,7 @@ export function NewsPanel() {
                         }
                       />
                       <TooltipContent>
-                        {mode === "list" ? "List view" : "Grid view"}
+                        {mode === "list" ? t("viewModeList") : t("viewModeGrid")}
                       </TooltipContent>
                     </Tooltip>
                   ))}
@@ -699,7 +699,7 @@ export function NewsPanel() {
                   setForm((s) => ({ ...s, title: e.target.value }));
                   setCreateErrors((er) => ({ ...er, title: undefined }));
                 }}
-                placeholder="Article headline…"
+                placeholder={t("placeholderTitle")}
               />
               {createErrors.title ? (
                 <p className="text-xs text-destructive">{createErrors.title}</p>
@@ -713,7 +713,7 @@ export function NewsPanel() {
                 id="news-subtitle"
                 value={form.subtitle}
                 onChange={(e) => setForm((s) => ({ ...s, subtitle: e.target.value }))}
-                placeholder="Short summary…"
+                placeholder={t("placeholderSubtitle")}
               />
             </div>
 
@@ -728,7 +728,7 @@ export function NewsPanel() {
                   setForm((s) => ({ ...s, description: e.target.value }));
                   setCreateErrors((er) => ({ ...er, description: undefined }));
                 }}
-                placeholder="Main content…"
+                placeholder={t("placeholderDescription")}
                 className="resize-none"
               />
               {/* Clear error on edit */}
@@ -750,7 +750,7 @@ export function NewsPanel() {
                 onChange={(e) =>
                   setForm((s) => ({ ...s, subDescription: e.target.value }))
                 }
-                placeholder="Additional details…"
+                placeholder={t("placeholderSubDescription")}
                 className="resize-none"
               />
             </div>

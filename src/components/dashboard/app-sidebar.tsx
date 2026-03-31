@@ -55,11 +55,9 @@ type NavDef = {
   staffOnly?: true;
 };
 
+/* Order: overview → content CMS → user/role admin → your account */
 const allNavDefs: readonly NavDef[] = [
   { href: "/", labelKey: "home", icon: LayoutDashboard },
-  { href: "/profile", labelKey: "profile", icon: User },
-  { href: "/password", labelKey: "password", icon: KeyRound },
-  { href: "/sessions", labelKey: "sessions", icon: MonitorSmartphone },
   { href: "/news", labelKey: "news", icon: Newspaper },
   {
     href: "/newsletter",
@@ -67,10 +65,13 @@ const allNavDefs: readonly NavDef[] = [
     icon: Mail,
     staffOnly: true,
   },
-  { href: "/horses", labelKey: "horses", icon: ChessKnight, staffOnly: true },
   { href: "/events", labelKey: "events", icon: CalendarClock, staffOnly: true },
+  { href: "/horses", labelKey: "horses", icon: ChessKnight, staffOnly: true },
   { href: "/users", labelKey: "users", icon: Users, staffOnly: true },
   { href: "/roles", labelKey: "roles", icon: Shield, staffOnly: true },
+  { href: "/profile", labelKey: "profile", icon: User },
+  { href: "/password", labelKey: "password", icon: KeyRound },
+  { href: "/sessions", labelKey: "sessions", icon: MonitorSmartphone },
 ] as const;
 
 export function AppSidebar() {

@@ -6,10 +6,19 @@ import {
   Pencil,
   Trash2,
   RefreshCw,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Images,
+  Plus,
+  PencilLine,
+  ArrowUp,
+  ArrowDown,
   Image as ImageIcon,
   Upload,
-  Tag,
+  Award,
   FileText,
+  Tag,
   Text,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,11 +33,23 @@ import { toastApiError } from "@/lib/toast-api-error";
 import {
   deleteHorse,
   fetchHorseById,
+  fetchHorseMedia,
+  addHorseMedia,
+  replaceHorseMediaFile,
+  updateHorseMediaMeta,
+  deleteHorseMedia,
+  reorderHorseMedia,
+  fetchHorseAwards,
+  createHorseAward,
+  updateHorseAward,
+  deleteHorseAward,
   normalizeHorseCoverImagePath,
   updateHorse,
   type HorseCategory,
   type HorseDetails,
   type HorseLocale,
+  type HorseMedia,
+  type HorseAward,
 } from "@/lib/horses-api";
 
 import { Badge } from "@/components/ui/badge";
@@ -160,6 +181,19 @@ const updateSchema = z.object({
   isActive: z.boolean(),
 });
 
+const awardSchema = z.object({
+  year: z
+    .string()
+    .trim()
+    .min(4, { message: "required" })
+    .refine((v) => Number.isFinite(Number(v)), { message: "required" }),
+  eventName: z.string().trim().min(1, { message: "required" }),
+  title: z.string().trim().min(1, { message: "required" }),
+  placing: z.string().trim().optional(),
+  location: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
+});
+
 function pickBestName(item: HorseDetails, locale: string): { name: string; subtitle: string } {
   const want = locale === "ar" ? "ar" : "en";
   const exact = item.translations?.find((t) => t.locale === want);
@@ -174,11 +208,52 @@ function pickBestName(item: HorseDetails, locale: string): { name: string; subti
 export function HorseDetailsPanel({ id }: { id: string }) {
   const t = useTranslations("HorseDetailsPage");
   const tList = useTranslations("HorsesPage");
+  const tMedia = useTranslations("HorsesMedia");
+  const tAwards = useTranslations("HorsesAwards");
   const locale = useLocale();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<HorseDetails | null>(null);
+
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaRows, setMediaRows] = useState<HorseMedia[]>([]);
+  const [mediaReorderMode, setMediaReorderMode] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
+  const [mediaUploadOpen, setMediaUploadOpen] = useState(false);
+  const [mediaUploadFile, setMediaUploadFile] = useState<File | null>(null);
+  const [mediaUploadCaption, setMediaUploadCaption] = useState("");
+  const [mediaUploadSortOrder, setMediaUploadSortOrder] = useState("");
+
+  const [mediaEditOpen, setMediaEditOpen] = useState(false);
+  const [mediaEditId, setMediaEditId] = useState<string | null>(null);
+  const [mediaEditCaption, setMediaEditCaption] = useState("");
+  const [mediaEditSortOrder, setMediaEditSortOrder] = useState("");
+
+  const [mediaReplaceOpen, setMediaReplaceOpen] = useState(false);
+  const [mediaReplaceId, setMediaReplaceId] = useState<string | null>(null);
+  const [mediaReplaceFile, setMediaReplaceFile] = useState<File | null>(null);
+
+  const [mediaDeleteOpen, setMediaDeleteOpen] = useState(false);
+  const [mediaDeleteId, setMediaDeleteId] = useState<string | null>(null);
+
+  const [awardsLoading, setAwardsLoading] = useState(false);
+  const [awardRows, setAwardRows] = useState<HorseAward[]>([]);
+  const [awardDialogOpen, setAwardDialogOpen] = useState(false);
+  const [awardEditingId, setAwardEditingId] = useState<string | null>(null);
+  const [awardDeleteOpen, setAwardDeleteOpen] = useState(false);
+  const [awardDeleteId, setAwardDeleteId] = useState<string | null>(null);
+  const [awardFormError, setAwardFormError] = useState<string | null>(null);
+  const [awardForm, setAwardForm] = useState({
+    year: "",
+    eventName: "",
+    title: "",
+    placing: "",
+    location: "",
+    notes: "",
+  });
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -236,9 +311,237 @@ export function HorseDetailsPanel({ id }: { id: string }) {
     }
   }, [id, t]);
 
+  const loadMedia = useCallback(async () => {
+    setMediaLoading(true);
+    try {
+      const rows = await fetchHorseMedia(id);
+      setMediaRows(rows);
+    } catch (e) {
+      toastApiError(e, tMedia("loadError"));
+      setMediaRows([]);
+    } finally {
+      setMediaLoading(false);
+    }
+  }, [id, tMedia]);
+
+  const loadAwards = useCallback(async () => {
+    setAwardsLoading(true);
+    try {
+      const rows = await fetchHorseAwards(id);
+      setAwardRows(rows);
+    } catch (e) {
+      toastApiError(e, tAwards("loadError"));
+      setAwardRows([]);
+    } finally {
+      setAwardsLoading(false);
+    }
+  }, [id, tAwards]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!id) return;
+    void loadMedia();
+    void loadAwards();
+  }, [id, loadMedia, loadAwards]);
+
+  function openViewer(index: number) {
+    setViewerIndex(Math.max(0, Math.min(mediaRows.length - 1, index)));
+    setViewerOpen(true);
+  }
+
+  function moveMedia(index: number, direction: -1 | 1) {
+    setMediaRows((prev) => {
+      const next = [...prev];
+      const to = index + direction;
+      if (index < 0 || index >= next.length) return prev;
+      if (to < 0 || to >= next.length) return prev;
+      const tmp = next[index];
+      next[index] = next[to];
+      next[to] = tmp;
+      return next;
+    });
+  }
+
+  async function persistMediaOrder() {
+    try {
+      const items = mediaRows.map((m, idx) => ({ id: m.id, sortOrder: idx * 10 }));
+      await reorderHorseMedia(id, items);
+      toast.success(tMedia("reorderSuccess"));
+      await loadMedia();
+      setMediaReorderMode(false);
+    } catch (e) {
+      toastApiError(e, tMedia("reorderError"));
+    }
+  }
+
+  async function onUploadMedia() {
+    if (!mediaUploadFile) {
+      toast.error(tMedia("fileRequired"));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await addHorseMedia(id, {
+        file: mediaUploadFile,
+        caption: mediaUploadCaption.trim() ? mediaUploadCaption.trim() : undefined,
+        sortOrder: mediaUploadSortOrder.trim()
+          ? Number(mediaUploadSortOrder)
+          : undefined,
+      });
+      toast.success(tMedia("uploadSuccess"));
+      setMediaUploadOpen(false);
+      setMediaUploadFile(null);
+      setMediaUploadCaption("");
+      setMediaUploadSortOrder("");
+      await loadMedia();
+    } catch (e) {
+      toastApiError(e, tMedia("uploadError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onReplaceMediaFile() {
+    if (!mediaReplaceId || !mediaReplaceFile) {
+      toast.error(tMedia("fileRequired"));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await replaceHorseMediaFile(id, mediaReplaceId, mediaReplaceFile);
+      toast.success(tMedia("replaceSuccess"));
+      setMediaReplaceOpen(false);
+      setMediaReplaceId(null);
+      setMediaReplaceFile(null);
+      await loadMedia();
+    } catch (e) {
+      toastApiError(e, tMedia("replaceError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onUpdateMediaMeta() {
+    if (!mediaEditId) return;
+    setSubmitting(true);
+    try {
+      await updateHorseMediaMeta(id, mediaEditId, {
+        caption: mediaEditCaption.trim() ? mediaEditCaption.trim() : undefined,
+        sortOrder: mediaEditSortOrder.trim()
+          ? Number(mediaEditSortOrder)
+          : undefined,
+      });
+      toast.success(tMedia("editSuccess"));
+      setMediaEditOpen(false);
+      setMediaEditId(null);
+      setMediaEditCaption("");
+      setMediaEditSortOrder("");
+      await loadMedia();
+    } catch (e) {
+      toastApiError(e, tMedia("editError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onDeleteMedia() {
+    if (!mediaDeleteId) return;
+    setSubmitting(true);
+    try {
+      await deleteHorseMedia(id, mediaDeleteId);
+      toast.success(tMedia("deleteSuccess"));
+      setMediaDeleteOpen(false);
+      setMediaDeleteId(null);
+      await loadMedia();
+    } catch (e) {
+      toastApiError(e, tMedia("deleteError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function openAwardCreate() {
+    setAwardFormError(null);
+    setAwardEditingId(null);
+    setAwardForm({
+      year: "",
+      eventName: "",
+      title: "",
+      placing: "",
+      location: "",
+      notes: "",
+    });
+    setAwardDialogOpen(true);
+  }
+
+  function openAwardEdit(a: HorseAward) {
+    setAwardFormError(null);
+    setAwardEditingId(a.id);
+    setAwardForm({
+      year: String(a.year),
+      eventName: a.eventName ?? "",
+      title: a.title ?? "",
+      placing: a.placing ?? "",
+      location: a.location ?? "",
+      notes: a.notes ?? "",
+    });
+    setAwardDialogOpen(true);
+  }
+
+  async function onSaveAward() {
+    setAwardFormError(null);
+    const parsed = awardSchema.safeParse(awardForm);
+    if (!parsed.success) {
+      setAwardFormError(tAwards("invalid"));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const payload = {
+        year: Number(awardForm.year),
+        eventName: awardForm.eventName.trim(),
+        title: awardForm.title.trim(),
+        placing: awardForm.placing.trim() || null,
+        location: awardForm.location.trim() || null,
+        notes: awardForm.notes.trim() || null,
+      };
+      if (awardEditingId) {
+        await updateHorseAward(id, awardEditingId, payload);
+        toast.success(tAwards("updateSuccess"));
+      } else {
+        await createHorseAward(id, payload);
+        toast.success(tAwards("createSuccess"));
+      }
+      setAwardDialogOpen(false);
+      await loadAwards();
+    } catch (e) {
+      toastApiError(
+        e,
+        awardEditingId ? tAwards("updateError") : tAwards("createError")
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onDeleteAward() {
+    if (!awardDeleteId) return;
+    setSubmitting(true);
+    try {
+      await deleteHorseAward(id, awardDeleteId);
+      toast.success(tAwards("deleteSuccess"));
+      setAwardDeleteOpen(false);
+      setAwardDeleteId(null);
+      await loadAwards();
+    } catch (e) {
+      toastApiError(e, tAwards("deleteError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const saveDisabled = useMemo(() => {
     const ok = updateSchema.safeParse({
@@ -466,6 +769,280 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div className="grid gap-3 rounded-lg border bg-muted/10 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-8 items-center justify-center rounded-lg border bg-background">
+                      <Images className="size-4 text-muted-foreground" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{tMedia("title")}</p>
+                      <p className="text-xs text-muted-foreground">{tMedia("description")}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="font-normal">
+                      {tMedia("count")}: {mediaLoading ? "…" : mediaRows.length}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={mediaLoading || submitting}
+                      onClick={() => void loadMedia()}
+                    >
+                      <RefreshCw className={cn("size-3.5", mediaLoading && "animate-spin")} />
+                      {tMedia("refresh")}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={submitting}
+                      onClick={() => setMediaUploadOpen(true)}
+                    >
+                      <Plus className="size-3.5" />
+                      {tMedia("upload")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={submitting || mediaRows.length < 2}
+                      onClick={() => setMediaReorderMode((v) => !v)}
+                    >
+                      {mediaReorderMode ? tMedia("done") : tMedia("reorder")}
+                    </Button>
+                    {mediaReorderMode ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={submitting || mediaRows.length < 2}
+                        onClick={() => void persistMediaOrder()}
+                      >
+                        {tMedia("saveOrder")}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {mediaLoading ? (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={i} className="aspect-[4/3] w-full rounded-lg" />
+                    ))}
+                  </div>
+                ) : mediaRows.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 py-10 text-center">
+                    <Images className="size-8 text-muted-foreground/50" aria-hidden />
+                    <p className="text-sm font-medium">{tMedia("empty")}</p>
+                    <p className="text-xs text-muted-foreground">{tMedia("emptyHint")}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {mediaRows.map((m, idx) => (
+                      <div key={m.id} className="group overflow-hidden rounded-lg border bg-background">
+                        <button
+                          type="button"
+                          className="relative block aspect-[4/3] w-full overflow-hidden bg-muted"
+                          onClick={() => openViewer(idx)}
+                        >
+                          <img
+                            src={m.url}
+                            alt={m.caption ?? ""}
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          <div className="absolute inset-0 hidden items-end justify-between bg-gradient-to-t from-black/55 to-transparent p-2 text-white group-hover:flex">
+                            <span className="line-clamp-1 text-xs">{m.caption ?? ""}</span>
+                            <ExternalLink className="size-3.5 opacity-90" aria-hidden />
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-1.5 border-t p-2">
+                          {mediaReorderMode ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                disabled={idx === 0 || submitting}
+                                onClick={() => moveMedia(idx, -1)}
+                              >
+                                <ArrowUp className="size-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                disabled={idx === mediaRows.length - 1 || submitting}
+                                onClick={() => moveMedia(idx, 1)}
+                              >
+                                <ArrowDown className="size-3.5" />
+                              </Button>
+                              <span className="ms-auto text-xs text-muted-foreground">
+                                {tMedia("order")}: {idx * 10}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                disabled={submitting}
+                                onClick={() => {
+                                  setMediaEditId(m.id);
+                                  setMediaEditCaption(m.caption ?? "");
+                                  setMediaEditSortOrder(
+                                    typeof m.sortOrder === "number" ? String(m.sortOrder) : ""
+                                  );
+                                  setMediaEditOpen(true);
+                                }}
+                              >
+                                <PencilLine className="size-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                disabled={submitting}
+                                onClick={() => {
+                                  setMediaReplaceId(m.id);
+                                  setMediaReplaceFile(null);
+                                  setMediaReplaceOpen(true);
+                                }}
+                              >
+                                <Upload className="size-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="destructive"
+                                className="ms-auto h-7 w-7"
+                                disabled={submitting}
+                                onClick={() => {
+                                  setMediaDeleteId(m.id);
+                                  setMediaDeleteOpen(true);
+                                }}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-3 rounded-lg border bg-muted/10 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-8 items-center justify-center rounded-lg border bg-background">
+                      <Award className="size-4 text-muted-foreground" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{tAwards("title")}</p>
+                      <p className="text-xs text-muted-foreground">{tAwards("description")}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="font-normal">
+                      {tAwards("count")}: {awardsLoading ? "…" : awardRows.length}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={awardsLoading || submitting}
+                      onClick={() => void loadAwards()}
+                    >
+                      <RefreshCw className={cn("size-3.5", awardsLoading && "animate-spin")} />
+                      {tAwards("refresh")}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={submitting}
+                      onClick={openAwardCreate}
+                    >
+                      <Plus className="size-3.5" />
+                      {tAwards("add")}
+                    </Button>
+                  </div>
+                </div>
+
+                {awardsLoading ? (
+                  <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Skeleton key={i} className="h-10 w-full" />
+                    ))}
+                  </div>
+                ) : awardRows.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 py-10 text-center">
+                    <Award className="size-8 text-muted-foreground/50" aria-hidden />
+                    <p className="text-sm font-medium">{tAwards("empty")}</p>
+                    <p className="text-xs text-muted-foreground">{tAwards("emptyHint")}</p>
+                  </div>
+                ) : (
+                  <div className="divide-y overflow-hidden rounded-lg border bg-card">
+                    {awardRows.map((a) => (
+                      <div
+                        key={a.id}
+                        className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {a.year} · {a.title}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {a.eventName}
+                            {a.location ? ` · ${a.location}` : ""}
+                            {a.placing ? ` · ${a.placing}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => openAwardEdit(a)}
+                            disabled={submitting}
+                          >
+                            <Pencil className="size-3.5" />
+                            {tAwards("edit")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="gap-1.5"
+                            disabled={submitting}
+                            onClick={() => {
+                              setAwardDeleteId(a.id);
+                              setAwardDeleteOpen(true);
+                            }}
+                          >
+                            <Trash2 className="size-3.5" />
+                            {tAwards("delete")}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-3 rounded-lg border bg-muted/10 p-4">
@@ -802,6 +1379,331 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             <Button type="button" disabled={saveDisabled} onClick={() => void onSave()} className="gap-1.5">
               {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
               {t("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Media viewer (lightbox) */}
+      <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
+        <DialogContent className="max-w-[92vw] sm:max-w-[900px]">
+          <DialogHeader className="pb-1">
+            <DialogTitle className="flex items-center justify-between gap-2 text-base font-semibold">
+              <span className="flex items-center gap-2">
+                <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                  <Images className="size-3.5 text-muted-foreground" aria-hidden />
+                </div>
+                {tMedia("viewerTitle")}
+              </span>
+              <Badge variant="outline" className="font-normal text-muted-foreground">
+                {mediaRows.length ? `${viewerIndex + 1} / ${mediaRows.length}` : "—"}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3">
+            <div className="relative overflow-hidden rounded-lg border bg-muted">
+              {mediaRows[viewerIndex] ? (
+                <img
+                  src={mediaRows[viewerIndex]!.url}
+                  alt={mediaRows[viewerIndex]!.caption ?? ""}
+                  className="h-[60vh] w-full object-contain"
+                  decoding="async"
+                />
+              ) : (
+                <div className="flex h-[60vh] items-center justify-center">
+                  <ImageIcon className="size-8 text-muted-foreground/40" />
+                </div>
+              )}
+            </div>
+            {mediaRows[viewerIndex]?.caption ? (
+              <p className="text-sm text-muted-foreground">{mediaRows[viewerIndex]!.caption}</p>
+            ) : null}
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={viewerIndex <= 0}
+                onClick={() => setViewerIndex((i) => Math.max(0, i - 1))}
+                className="gap-1"
+              >
+                <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden />
+                {tMedia("prev")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={viewerIndex >= mediaRows.length - 1}
+                onClick={() => setViewerIndex((i) => Math.min(mediaRows.length - 1, i + 1))}
+                className="gap-1"
+              >
+                {tMedia("next")}
+                <ChevronRight className="size-4 rtl:rotate-180" aria-hidden />
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Media upload dialog */}
+      <Dialog open={mediaUploadOpen} onOpenChange={setMediaUploadOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <Upload className="size-3.5 text-muted-foreground" aria-hidden />
+              </div>
+              {tMedia("uploadTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{tMedia("uploadDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tMedia("file")}</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setMediaUploadFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tMedia("caption")}</Label>
+              <Input value={mediaUploadCaption} onChange={(e) => setMediaUploadCaption(e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tMedia("sortOrder")}</Label>
+              <Input
+                inputMode="numeric"
+                value={mediaUploadSortOrder}
+                onChange={(e) => setMediaUploadSortOrder(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setMediaUploadOpen(false)}>
+              {tMedia("cancel")}
+            </Button>
+            <Button type="button" disabled={submitting} onClick={() => void onUploadMedia()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+              {tMedia("upload")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Media edit dialog */}
+      <Dialog open={mediaEditOpen} onOpenChange={setMediaEditOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <PencilLine className="size-3.5 text-muted-foreground" aria-hidden />
+              </div>
+              {tMedia("editTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{tMedia("editDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tMedia("caption")}</Label>
+              <Input value={mediaEditCaption} onChange={(e) => setMediaEditCaption(e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tMedia("sortOrder")}</Label>
+              <Input
+                inputMode="numeric"
+                value={mediaEditSortOrder}
+                onChange={(e) => setMediaEditSortOrder(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setMediaEditOpen(false)}>
+              {tMedia("cancel")}
+            </Button>
+            <Button type="button" disabled={submitting} onClick={() => void onUpdateMediaMeta()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <PencilLine className="size-3.5" />}
+              {tMedia("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Media replace file dialog */}
+      <Dialog open={mediaReplaceOpen} onOpenChange={setMediaReplaceOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <Upload className="size-3.5 text-muted-foreground" aria-hidden />
+              </div>
+              {tMedia("replaceTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{tMedia("replaceDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tMedia("file")}</Label>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setMediaReplaceFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setMediaReplaceOpen(false)}>
+              {tMedia("cancel")}
+            </Button>
+            <Button type="button" disabled={submitting} onClick={() => void onReplaceMediaFile()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+              {tMedia("replace")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Media delete dialog */}
+      <Dialog open={mediaDeleteOpen} onOpenChange={setMediaDeleteOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <Trash2 className="size-3.5 text-muted-foreground" aria-hidden />
+              </div>
+              {tMedia("deleteTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{tMedia("deleteDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setMediaDeleteOpen(false)}>
+              {tMedia("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={submitting}
+              onClick={() => void onDeleteMedia()}
+              className="gap-1.5"
+            >
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              {tMedia("confirmDelete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Award create/edit dialog */}
+      <Dialog open={awardDialogOpen} onOpenChange={setAwardDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <Award className="size-3.5 text-muted-foreground" aria-hidden />
+              </div>
+              {awardEditingId ? tAwards("editTitle") : tAwards("createTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {awardEditingId ? tAwards("editDescription") : tAwards("createDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3">
+            {awardFormError ? <p className="text-xs text-destructive">{awardFormError}</p> : null}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label className="text-sm">{tAwards("fieldYear")}</Label>
+                <Input
+                  inputMode="numeric"
+                  value={awardForm.year}
+                  onChange={(e) => setAwardForm((s) => ({ ...s, year: e.target.value }))}
+                  placeholder="2026"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-sm">{tAwards("fieldEventName")}</Label>
+                <Input
+                  value={awardForm.eventName}
+                  onChange={(e) => setAwardForm((s) => ({ ...s, eventName: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tAwards("fieldTitle")}</Label>
+              <Input value={awardForm.title} onChange={(e) => setAwardForm((s) => ({ ...s, title: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label className="text-sm">{tAwards("fieldPlacing")}</Label>
+                <Input
+                  value={awardForm.placing}
+                  onChange={(e) => setAwardForm((s) => ({ ...s, placing: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-sm">{tAwards("fieldLocation")}</Label>
+                <Input
+                  value={awardForm.location}
+                  onChange={(e) => setAwardForm((s) => ({ ...s, location: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-sm">{tAwards("fieldNotes")}</Label>
+              <Textarea
+                value={awardForm.notes}
+                onChange={(e) => setAwardForm((s) => ({ ...s, notes: e.target.value }))}
+                rows={3}
+                className="resize-none text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setAwardDialogOpen(false)}>
+              {tAwards("cancel")}
+            </Button>
+            <Button type="button" disabled={submitting} onClick={() => void onSaveAward()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
+              {awardEditingId ? tAwards("save") : tAwards("create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Award delete dialog */}
+      <Dialog open={awardDeleteOpen} onOpenChange={setAwardDeleteOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
+                <Trash2 className="size-3.5 text-muted-foreground" aria-hidden />
+              </div>
+              {tAwards("deleteTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{tAwards("deleteDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setAwardDeleteOpen(false)}>
+              {tAwards("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={submitting}
+              onClick={() => void onDeleteAward()}
+              className="gap-1.5"
+            >
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              {tAwards("confirmDelete")}
             </Button>
           </DialogFooter>
         </DialogContent>

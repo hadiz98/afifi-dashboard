@@ -114,3 +114,76 @@ File:
 ### Delete horse (soft delete)
 `DELETE /api/horses/:id`
 
+## Media management (staff)
+
+All endpoints below require JWT + staff role.
+
+### List media
+`GET /api/horses/:id/media`
+
+### Add image
+`POST /api/horses/:id/media` (multipart/form-data)
+
+- file field: `file` (required)
+- body fields: `caption?`, `sortOrder?`
+
+### Replace image file
+`PATCH /api/horses/:id/media/:mediaId/file` (multipart/form-data)
+
+- file field: `file` (required)
+
+Behavior:
+- updates DB `url` to the new file
+- deletes old file after success
+
+### Update media metadata
+`PATCH /api/horses/:id/media/:mediaId` (JSON)
+
+Body:
+- `caption?`
+- `sortOrder?`
+
+### Delete media
+`DELETE /api/horses/:id/media/:mediaId`
+
+Behavior:
+- deletes DB row
+- attempts to delete the file from disk (ignores missing file)
+
+### Reorder media (bulk)
+`PATCH /api/horses/:id/media/reorder` (JSON)
+
+```json
+{
+  "items": [
+    { "id": "media-uuid-1", "sortOrder": 0 },
+    { "id": "media-uuid-2", "sortOrder": 10 }
+  ]
+}
+```
+
+## Awards management (staff)
+
+### List awards
+`GET /api/horses/:id/awards`
+
+### Add award
+`POST /api/horses/:id/awards`
+
+```json
+{
+  "year": 2026,
+  "eventName": "KIAHF",
+  "title": "Gold Champion",
+  "placing": "1st",
+  "location": "Riyadh",
+  "notes": "Optional"
+}
+```
+
+### Update award
+`PATCH /api/horses/:id/awards/:awardId`
+
+### Delete award
+`DELETE /api/horses/:id/awards/:awardId`
+

@@ -13,13 +13,6 @@ import {
 } from "@/lib/auth-session";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -29,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuthUser } from "@/hooks/use-auth-user";
 import { cn } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -87,10 +81,39 @@ function rowIsCurrent(row: Row, id: string): boolean {
   return id.length > 0 && stored != null && stored === id;
 }
 
+function rowUserLabel(row: Row): { primary: string; secondary?: string } {
+  const user = row.user;
+  if (user && typeof user === "object") {
+    const u = user as Record<string, unknown>;
+    const name = typeof u.name === "string" ? u.name : "";
+    const email = typeof u.email === "string" ? u.email : "";
+    if (name && email) return { primary: name, secondary: email };
+    if (name) return { primary: name };
+    if (email) return { primary: email };
+  }
+  const email = row.userEmail ?? row.email;
+  if (typeof email === "string" && email.length > 0) return { primary: email };
+  const name = row.userName ?? row.name;
+  if (typeof name === "string" && name.length > 0) return { primary: name };
+  const userId = row.userId ?? row.user_id;
+  if (typeof userId === "string" && userId.length > 0) return { primary: userId };
+  return { primary: "—" };
+}
+
+function StatBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
 export function SessionsPanel() {
   const t = useTranslations("SessionsPage");
   const locale = useLocale();
   const router = useRouter();
+  const { roles } = useAuthUser();
+  const canRevoke = roles.some((r) => r === "admin" || r === "superadmin");
   const formatDate = useCallback((value: unknown): string => {
     if (typeof value !== "string" || value.length === 0) return "—";
     const d = new Date(value);
@@ -127,6 +150,7 @@ export function SessionsPanel() {
   }, [load]);
 
   async function revoke(row: Row) {
+    if (!canRevoke) return;
     const id = cellId(row);
     if (!id) return;
     const wasCurrent = rowIsCurrent(row, id);
@@ -153,147 +177,127 @@ export function SessionsPanel() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl p-4 md:p-8">
-      <Card className="overflow-hidden border shadow-sm">
-        <CardHeader className="border-b bg-card px-6 py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-3">
-              <div
-                className={cn(
-                  "flex size-11 shrink-0 items-center justify-center rounded-xl border bg-muted/50",
-                  "text-muted-foreground"
-                )}
-              >
-                <MonitorSmartphone className="size-5" aria-hidden />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-semibold tracking-tight">
-                  {t("title")}
-                </CardTitle>
-                <CardDescription className="mt-1 max-w-xl text-sm">
-                  {t("description")}
-                </CardDescription>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="font-normal">
-                {loading ? "…" : rows.length} {t("countLabel")}
-              </Badge>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={loading}
-                onClick={() => void load()}
-              >
-                <RefreshCw
-                  className={cn("size-3.5", loading && "animate-spin")}
-                  aria-hidden
-                />
-                {t("refresh")}
-              </Button>
-            </div>
+    <div className="mx-auto w-full max-w-5xl space-y-4 px-3 py-5 sm:px-6 sm:py-8">
+
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-card shadow-sm">
+            <MonitorSmartphone className="size-4 text-muted-foreground" aria-hidden />
           </div>
-        </CardHeader>
-        <CardContent className="p-6">
-          {loading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("empty")}</p>
-          ) : (
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="min-w-[7rem] whitespace-nowrap">
-                      {t("colId")}
-                    </TableHead>
-                    <TableHead className="min-w-[12rem]">
-                      {t("colClient")}
-                    </TableHead>
-                    <TableHead className="whitespace-nowrap">
-                      {t("colIp")}
-                    </TableHead>
-                    <TableHead className="whitespace-nowrap">
-                      {t("colCreated")}
-                    </TableHead>
-                    <TableHead className="whitespace-nowrap">
-                      {t("colExpires")}
-                    </TableHead>
-                    <TableHead className="w-[1%] whitespace-nowrap text-center">
-                      {t("colCurrent")}
-                    </TableHead>
-                    <TableHead className="w-[1%] text-end whitespace-nowrap">
-                      {t("colAction")}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row) => {
-                    const id = cellId(row);
-                    const current = rowIsCurrent(row, id);
-                    const ua = rowUserAgent(row);
-                    return (
-                      <TableRow key={id || JSON.stringify(row)}>
-                        <TableCell
-                          className="max-w-[8rem] font-mono text-xs text-muted-foreground"
-                          title={id || undefined}
+          <div>
+            <h1 className="text-lg font-bold tracking-tight text-foreground">{t("title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("description")}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatBadge>{loading ? "…" : rows.length} {t("countLabel")}</StatBadge>
+          {!canRevoke ? <StatBadge>{t("viewOnly")}</StatBadge> : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            disabled={loading}
+            onClick={() => void load()}
+            aria-label={t("refresh")}
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden />
+          </Button>
+        </div>
+      </div>
+
+      {/* ── List card ───────────────────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        {loading ? (
+          <div className="divide-y divide-border/60">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="ms-auto h-7 w-20 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="m-4 rounded-xl border border-dashed border-border/60 bg-muted/10 py-20 text-center">
+            <MonitorSmartphone className="mx-auto size-10 text-muted-foreground/40" aria-hidden />
+            <p className="mt-3 text-sm font-semibold text-foreground">{t("empty")}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30 hover:bg-transparent">
+                  <TableHead className="ps-6 text-start min-w-[10rem]">{t("colUser")}</TableHead>
+                  <TableHead className="text-start min-w-[7rem] whitespace-nowrap">{t("colId")}</TableHead>
+                  <TableHead className="text-start min-w-[12rem]">{t("colClient")}</TableHead>
+                  <TableHead className="text-start whitespace-nowrap">{t("colIp")}</TableHead>
+                  <TableHead className="text-start whitespace-nowrap">{t("colCreated")}</TableHead>
+                  <TableHead className="text-start whitespace-nowrap">{t("colExpires")}</TableHead>
+                  <TableHead className="text-center w-[1%] whitespace-nowrap">{t("colCurrent")}</TableHead>
+                  <TableHead className="pe-6 text-end w-[1%] whitespace-nowrap">{t("colAction")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const id = cellId(row);
+                  const current = rowIsCurrent(row, id);
+                  const ua = rowUserAgent(row);
+                  const who = rowUserLabel(row);
+                  return (
+                    <TableRow key={id || JSON.stringify(row)} className="hover:bg-muted/20">
+                      <TableCell className="ps-6">
+                        <p className="truncate text-sm font-semibold text-foreground">{who.primary}</p>
+                        {who.secondary ? (
+                          <p className="truncate text-xs text-muted-foreground">{who.secondary}</p>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="max-w-[8rem] font-mono text-xs text-muted-foreground" title={id || undefined}>
+                        {id ? (id.length > 12 ? `${id.slice(0, 8)}…` : id) : "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[min(24rem,50vw)] truncate text-sm" title={ua !== "—" ? ua : undefined}>
+                        {ua.length > 100 ? `${ua.slice(0, 100)}…` : ua}
+                      </TableCell>
+                      <TableCell className="text-sm">{rowIp(row)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        {formatDate(row.createdAt ?? row.created_at)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                        {formatDate(row.expiresAt ?? row.expires_at)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {current ? (
+                          <Badge variant="default" className="text-[10px] font-normal">
+                            {t("currentBadge")}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="pe-6 text-end">
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="gap-1"
+                          disabled={!canRevoke || !id || revoking === id}
+                          onClick={() => void revoke(row)}
+                          title={!canRevoke ? t("noRevokePermission") : undefined}
                         >
-                          {id
-                            ? id.length > 12
-                              ? `${id.slice(0, 8)}…`
-                              : id
-                            : "—"}
-                        </TableCell>
-                        <TableCell
-                          className="max-w-[min(24rem,50vw)] truncate text-sm"
-                          title={ua !== "—" ? ua : undefined}
-                        >
-                          {ua.length > 100 ? `${ua.slice(0, 100)}…` : ua}
-                        </TableCell>
-                        <TableCell className="text-sm">{rowIp(row)}</TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          {formatDate(row.createdAt ?? row.created_at)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          {formatDate(row.expiresAt ?? row.expires_at)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {current ? (
-                            <Badge variant="default" className="text-[10px] font-normal">
-                              {t("currentBadge")}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-end">
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            className="gap-1"
-                            disabled={!id || revoking === id}
-                            onClick={() => void revoke(row)}
-                          >
-                            <Trash2 className="size-3.5" aria-hidden />
-                            {t("revoke")}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                          <Trash2 className="size-3.5" aria-hidden />
+                          {t("revoke")}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

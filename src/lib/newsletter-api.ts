@@ -44,7 +44,7 @@ export function parseNewsletterListResponse(
   fallbackPage: number,
   fallbackLimit: number
 ): NewsletterListResult {
-  let rows: NewsletterSubscriber[] = [];
+  const rows: NewsletterSubscriber[] = [];
   let total = 0;
   let page = fallbackPage;
   let limit = fallbackLimit;

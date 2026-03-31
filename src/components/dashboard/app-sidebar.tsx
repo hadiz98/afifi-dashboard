@@ -10,6 +10,7 @@ import {
   Mail,
   Newspaper,
   Shield,
+  Trophy,
   User,
   Users,
 } from "lucide-react";
@@ -41,6 +42,7 @@ type NavLabelKey =
   | "sessions"
   | "news"
   | "newsletter"
+  | "horses"
   | "users"
   | "roles";
 
@@ -63,6 +65,7 @@ const allNavDefs: readonly NavDef[] = [
     icon: Mail,
     staffOnly: true,
   },
+  { href: "/horses", labelKey: "horses", icon: Trophy, staffOnly: true },
   { href: "/users", labelKey: "users", icon: Users, staffOnly: true },
   { href: "/roles", labelKey: "roles", icon: Shield, staffOnly: true },
 ] as const;

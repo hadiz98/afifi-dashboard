@@ -21,7 +21,11 @@ export class NewsTranslation {
   @Column('uuid', { name: 'news_id' })
   newsId: string;
 
-  @ManyToOne(() => News, (news) => (news as any).translations, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => News,
+    (news) => (news as unknown as { translations: NewsTranslation[] }).translations,
+    { onDelete: 'CASCADE' }
+  )
   @JoinColumn({ name: 'news_id' })
   news: News;
 

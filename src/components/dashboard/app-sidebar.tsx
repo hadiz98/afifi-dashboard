@@ -10,7 +10,7 @@ import {
   Mail,
   Newspaper,
   Shield,
-  Trophy,
+  ChessKnight,
   User,
   Users,
 } from "lucide-react";
@@ -65,7 +65,7 @@ const allNavDefs: readonly NavDef[] = [
     icon: Mail,
     staffOnly: true,
   },
-  { href: "/horses", labelKey: "horses", icon: Trophy, staffOnly: true },
+  { href: "/horses", labelKey: "horses", icon: ChessKnight, staffOnly: true },
   { href: "/users", labelKey: "users", icon: Users, staffOnly: true },
   { href: "/roles", labelKey: "roles", icon: Shield, staffOnly: true },
 ] as const;

@@ -3,7 +3,7 @@
 import {
   ChevronLeft,
   ChevronRight,
-  Trophy,
+  ChessKnight,
   Plus,
   RefreshCw,
   Upload,
@@ -323,7 +323,7 @@ export function HorsesPanel() {
                   "text-muted-foreground"
                 )}
               >
-                <Trophy className="size-5" aria-hidden />
+                <ChessKnight className="size-5" aria-hidden />
               </div>
               <div>
                 <CardTitle className="text-xl font-semibold tracking-tight">
@@ -398,7 +398,7 @@ export function HorsesPanel() {
             </div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 py-16 text-center">
-              <Trophy className="size-10 text-muted-foreground/50" aria-hidden />
+              <ChessKnight className="size-10 text-muted-foreground/50" aria-hidden />
               <p className="text-sm font-medium text-foreground">{t("empty")}</p>
               <p className="text-xs text-muted-foreground">{t("emptyHint")}</p>
             </div>
@@ -517,7 +517,7 @@ export function HorsesPanel() {
           <DialogHeader className="pb-1">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
-                <Trophy className="size-3.5 text-muted-foreground" aria-hidden />
+                <ChessKnight className="size-3.5 text-muted-foreground" aria-hidden />
               </div>
               {t("dialogCreateTitle")}
             </DialogTitle>

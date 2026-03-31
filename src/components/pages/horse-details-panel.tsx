@@ -2,7 +2,7 @@
 
 import {
   ArrowLeft,
-  Trophy,
+  ChessKnight,
   Pencil,
   Trash2,
   RefreshCw,
@@ -645,7 +645,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                   "text-muted-foreground"
                 )}
               >
-                <Trophy className="size-5" aria-hidden />
+                <ChessKnight className="size-5" aria-hidden />
               </div>
               <div className="min-w-0">
                 <CardTitle className="truncate text-xl font-semibold tracking-tight">
@@ -705,7 +705,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             </div>
           ) : !item ? (
             <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 py-16 text-center">
-              <Trophy className="size-10 text-muted-foreground/50" aria-hidden />
+              <ChessKnight className="size-10 text-muted-foreground/50" aria-hidden />
               <p className="text-sm font-medium text-foreground">{t("notFound")}</p>
               <p className="text-xs text-muted-foreground">{t("notFoundHint")}</p>
             </div>

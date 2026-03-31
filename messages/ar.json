@@ -141,6 +141,7 @@
     "colDescription": "الوصف"
   },
   "NewsPage": {
+    "clickToUpload": "اضغط للرفع",
     "title": "الأخبار",
     "description": "إدارة عناصر الأخبار.",
     "countLabel": "عناصر",
@@ -464,6 +465,8 @@
     "create": "إنشاء",
     "createInvalid": "يرجى تعبئة الحقول المطلوبة وإضافة الترجمات باللغتين (EN و AR).",
     "endsBeforeStarts": "يجب أن يكون وقت الانتهاء بعد وقت البدء.",
+    "clickToUpload": "انقر للرفع",
+    "clickToReplace": "انقر للاستبدال",
     "createSuccess": "تم إنشاء الفعالية",
     "createError": "تعذر إنشاء الفعالية"
   },
@@ -510,8 +513,10 @@
     "confirmDelete": "حذف",
     "deleteSuccess": "تم حذف الفعالية",
     "deleteError": "تعذر حذف الفعالية",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "clickToUpload": "انقر للرفع",
+    "clickToReplace": "انقر للاستبدال"
   }
   }
-  }
-}
+  
+

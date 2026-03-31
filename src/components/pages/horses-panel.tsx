@@ -317,11 +317,11 @@ export function HorsesPanel() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/60 bg-muted/30">
-                    <th className="px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colHorse")}</th>
-                    <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colCategory")}</th>
-                    <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colStatus")}</th>
-                    <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colLocales")}</th>
-                    <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colAction")}</th>
+                    <th className="px-5 py-2.5 text-start text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colHorse")}</th>
+                    <th className="px-4 py-2.5 text-start text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colCategory")}</th>
+                    <th className="px-4 py-2.5 text-start text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colStatus")}</th>
+                    <th className="px-4 py-2.5 text-start text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colLocales")}</th>
+                    <th className="px-5 py-2.5 text-end text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colAction")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -374,7 +374,7 @@ export function HorsesPanel() {
                             ))}
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-right">
+                        <td className="px-5 py-3 text-end">
                           <Button variant="outline" size="sm"
                             className="h-7 gap-1.5 px-3 text-xs"
                             nativeButton={false}

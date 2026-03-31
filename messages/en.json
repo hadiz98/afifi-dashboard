@@ -466,6 +466,8 @@
     "create": "Create",
     "createInvalid": "Please fill required fields and both translations (EN + AR).",
     "endsBeforeStarts": "End time must be after start time.",
+    "clickToUpload": "Click to upload",
+    "clickToReplace": "Click to replace",
     "createSuccess": "Event created",
     "createError": "Could not create event"
   },
@@ -512,6 +514,8 @@
     "confirmDelete": "Delete",
     "deleteSuccess": "Event deleted",
     "deleteError": "Could not delete event",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "clickToUpload": "Click to upload",
+    "clickToReplace": "Click to replace"
   }
 }

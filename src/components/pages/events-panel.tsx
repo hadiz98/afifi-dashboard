@@ -4,11 +4,12 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
+  XCircle,
   Image as ImageIcon,
   Plus,
   RefreshCw,
-  Text,
-  FileText,
+  Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -29,13 +30,6 @@ import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,7 +42,6 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
 import { NewsDateTimePicker } from "@/components/news-date-time-picker";
@@ -70,11 +63,11 @@ function emptyTranslations(): TranslationsForm {
 
 function hasBothTranslationsRequired(tr: TranslationsForm): boolean {
   return (["en", "ar"] as const).every((loc) => {
-    const t = tr[loc];
+    const v = tr[loc];
     return (
-      t.title.trim().length > 0 &&
-      t.subtitle.trim().length > 0 &&
-      t.description.trim().length > 0
+      v.title.trim().length > 0 &&
+      v.subtitle.trim().length > 0 &&
+      v.description.trim().length > 0
     );
   });
 }
@@ -94,10 +87,19 @@ function formatWhen(iso: string | null | undefined, locale: string): string {
 }
 
 const createSchema = z.object({
-  slug: z.string().trim().min(1, { message: "required" }),
+  slug: z.string().trim().min(1),
   startsAt: z.date(),
   endsAt: z.date().nullable(),
 });
+
+// ─── Stat badge ───────────────────────────────────────────────────────────────
+function StatBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+      {children}
+    </span>
+  );
+}
 
 export function EventsPanel() {
   const t = useTranslations("EventsPage");
@@ -105,11 +107,9 @@ export function EventsPanel() {
 
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [bundle, setBundle] = useState<{ rows: EventAdminListItem[]; total: number; pages: number }>({
-    rows: [],
-    total: 0,
-    pages: 1,
-  });
+  const [rows, setRows] = useState<EventAdminListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -134,18 +134,18 @@ export function EventsPanel() {
     setLoading(true);
     try {
       const result = await fetchEventsPage({ page, limit: PAGE_SIZE });
-      setBundle({ rows: result.rows, total: result.meta.total, pages: result.meta.pages });
+      setRows(result.rows);
+      setTotal(result.meta.total);
+      setTotalPages(result.meta.pages);
     } catch (e) {
       toastApiError(e, t("loadError"));
-      setBundle({ rows: [], total: 0, pages: 1 });
+      setRows([]); setTotal(0); setTotalPages(1);
     } finally {
       setLoading(false);
     }
   }, [page, t]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const createDisabled = useMemo(() => {
     if (submitting) return true;
@@ -156,7 +156,7 @@ export function EventsPanel() {
     });
     if (!parsed.success) return true;
     if (!hasBothTranslationsRequired(form.translations)) return true;
-    if (form.endsAt && form.startsAt && form.endsAt.getTime() < form.startsAt.getTime()) return true;
+    if (form.endsAt && form.startsAt && form.endsAt < form.startsAt) return true;
     return false;
   }, [form, submitting]);
 
@@ -171,11 +171,10 @@ export function EventsPanel() {
       setCreateError(t("createInvalid"));
       return;
     }
-    if (form.endsAt && form.startsAt && form.endsAt.getTime() < form.startsAt.getTime()) {
+    if (form.endsAt && form.startsAt && form.endsAt < form.startsAt) {
       setCreateError(t("endsBeforeStarts"));
       return;
     }
-
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -183,22 +182,22 @@ export function EventsPanel() {
       fd.append("startsAt", form.startsAt!.toISOString());
       if (form.endsAt) fd.append("endsAt", form.endsAt.toISOString());
       fd.append("isActive", form.isActive ? "1" : "0");
-
-      const translationsPayload = {
-        en: {
-          title: form.translations.en.title.trim(),
-          subtitle: form.translations.en.subtitle.trim(),
-          description: form.translations.en.description.trim(),
-        },
-        ar: {
-          title: form.translations.ar.title.trim(),
-          subtitle: form.translations.ar.subtitle.trim(),
-          description: form.translations.ar.description.trim(),
-        },
-      };
-      fd.append("translations", JSON.stringify(translationsPayload));
+      fd.append(
+        "translations",
+        JSON.stringify({
+          en: {
+            title: form.translations.en.title.trim(),
+            subtitle: form.translations.en.subtitle.trim(),
+            description: form.translations.en.description.trim(),
+          },
+          ar: {
+            title: form.translations.ar.title.trim(),
+            subtitle: form.translations.ar.subtitle.trim(),
+            description: form.translations.ar.description.trim(),
+          },
+        }),
+      );
       if (imageFile) fd.append("image", imageFile);
-
       await createEvent(fd);
       toast.success(t("createSuccess"));
       setCreateOpen(false);
@@ -213,250 +212,381 @@ export function EventsPanel() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 md:px-8">
-      <Card className="overflow-hidden border shadow-sm">
-        <CardHeader className="border-b bg-card px-6 py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-3">
-              <div className={cn("flex size-11 shrink-0 items-center justify-center rounded-xl border bg-muted/50", "text-muted-foreground")}>
-                <CalendarClock className="size-5" aria-hidden />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-semibold tracking-tight">{t("title")}</CardTitle>
-                <CardDescription className="mt-1 max-w-xl text-sm">{t("description")}</CardDescription>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="font-normal">
-                {t("total")}: {loading ? "…" : bundle.total}
-              </Badge>
-              <Badge variant="outline" className="font-normal text-muted-foreground">
-                {t("page")} {page} / {bundle.pages || 1}
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
+    <div className="mx-auto w-full max-w-5xl space-y-4 px-3 py-5 sm:px-6 sm:py-8">
 
-        <CardContent className="space-y-4 p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled={loading} onClick={() => void load()}>
-              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-              {t("refresh")}
-            </Button>
-            <Button type="button" size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-              <Plus className="size-3.5" />
-              {t("add")}
-            </Button>
-            <div className="ms-auto flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))} className="gap-1">
-                <ChevronLeft className="size-4 rtl:rotate-180" aria-hidden />
-                {t("prev")}
-              </Button>
-              <Button type="button" variant="outline" size="sm" disabled={page >= bundle.pages || loading} onClick={() => setPage((p) => Math.min(Math.max(1, bundle.pages), p + 1))} className="gap-1">
-                {t("next")}
-                <ChevronRight className="size-4 rtl:rotate-180" aria-hidden />
-              </Button>
-            </div>
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-card shadow-sm">
+            <CalendarClock className="size-4 text-muted-foreground" />
           </div>
+          <div>
+            <h1 className="text-lg font-bold tracking-tight text-foreground">{t("title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("description")}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatBadge>{loading ? "…" : total} {t("total")}</StatBadge>
+          <StatBadge>{t("page")} {page} / {totalPages || 1}</StatBadge>
+          <Button
+            type="button" variant="ghost" size="sm" className="h-8 w-8 p-0"
+            disabled={loading} onClick={() => void load()}
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+          </Button>
+          <Button
+            type="button" size="sm" className="h-8 gap-1.5 text-xs"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="size-3.5" />{t("add")}
+          </Button>
+        </div>
+      </div>
 
-          {loading ? (
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
+      {/* ── List card ───────────────────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        {loading ? (
+          <div className="divide-y divide-border/60">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3">
+                <Skeleton className="h-10 w-16 shrink-0 rounded-lg" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-40" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+                <Skeleton className="h-5 w-14 rounded-full" />
+                <Skeleton className="h-7 w-16 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        ) : rows.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="flex w-full flex-col items-center gap-2 py-20 text-center transition-colors hover:bg-muted/10"
+          >
+            <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-background shadow-sm">
+              <CalendarClock className="size-5 text-muted-foreground" />
             </div>
-          ) : bundle.rows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/20 py-16 text-center">
-              <CalendarClock className="size-10 text-muted-foreground/50" aria-hidden />
+            <div>
               <p className="text-sm font-medium text-foreground">{t("empty")}</p>
               <p className="text-xs text-muted-foreground">{t("emptyHint")}</p>
             </div>
-          ) : (
-            <div className="overflow-hidden rounded-lg border bg-card">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="ps-6">{t("colEvent")}</TableHead>
-                    <TableHead>{t("colWhen")}</TableHead>
-                    <TableHead>{t("colStatus")}</TableHead>
-                    <TableHead>{t("colLocales")}</TableHead>
-                    <TableHead className="pe-6 text-right">{t("colAction")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bundle.rows.map((row) => {
-                    const best = pickBestTranslation(row, locale);
-                    const img = row.image?.trim() ? normalizeEventImagePath(row.image) : null;
-                    const locales = new Set((row.translations ?? []).map((x) => x.locale));
-                    return (
-                      <TableRow key={row.id}>
-                        <TableCell className="ps-6">
-                          <div className="flex items-center gap-3">
-                            <div className="h-9 w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
-                              {img ? (
-                                <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
-                              ) : (
-                                <div className="flex h-full items-center justify-center">
-                                  <ImageIcon className="size-4 text-muted-foreground/40" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium">{best?.title?.trim() ? best.title : "—"}</p>
-                              <p className="truncate text-xs text-muted-foreground">{best?.subtitle?.trim() ? best.subtitle : row.slug}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          <div className="grid gap-0.5">
-                            <span>{t("startsAtLabel")}: {formatWhen(row.startsAt, locale)}</span>
-                            <span>{t("endsAtLabel")}: {row.endsAt ? formatWhen(row.endsAt, locale) : "—"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {row.isActive === false ? (
-                            <Badge variant="outline" className="font-normal text-muted-foreground">{t("inactive")}</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="font-normal">{t("active")}</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1.5">
-                            {(["en", "ar"] as const).map((loc) => (
-                              <Badge key={loc} variant={locales.has(loc) ? "secondary" : "outline"} className={cn("rounded-full px-2.5 py-0.5 text-xs font-normal", !locales.has(loc) && "text-muted-foreground")}>
-                                {loc.toUpperCase()}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="pe-6 text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-1 px-2 text-xs"
-                            nativeButton={false}
-                            render={<Link href={`/events/${encodeURIComponent(row.id)}`}>{t("view")}</Link>}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </button>
+        ) : (
+          <div className="divide-y divide-border/60">
+            {rows.map((row) => {
+              const best = pickBestTranslation(row, locale);
+              const img = row.image?.trim() ? normalizeEventImagePath(row.image) : null;
+              const locales = new Set((row.translations ?? []).map((x) => x.locale));
+              return (
+                <div
+                  key={row.id}
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/20"
+                >
+                  {/* Thumbnail */}
+                  <div className="h-10 w-16 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
+                    {img ? (
+                      <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <ImageIcon className="size-4 text-muted-foreground/40" />
+                      </div>
+                    )}
+                  </div>
 
+                  {/* Name + when */}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {best?.title?.trim() ? best.title : "—"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {formatWhen(row.startsAt, locale)}
+                      {row.endsAt ? ` → ${formatWhen(row.endsAt, locale)}` : ""}
+                    </p>
+                  </div>
+
+                  {/* Locale badges */}
+                  <div className="hidden items-center gap-1 sm:flex">
+                    {(["en", "ar"] as const).map((loc) => (
+                      <span
+                        key={loc}
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                          locales.has(loc)
+                            ? "bg-primary/10 text-primary"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {loc}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Status */}
+                  {row.isActive !== false ? (
+                    <span className="hidden items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 sm:inline-flex">
+                      <CheckCircle2 className="size-3" />{t("active")}
+                    </span>
+                  ) : (
+                    <span className="hidden items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-xs font-medium text-muted-foreground sm:inline-flex">
+                      <XCircle className="size-3" />{t("inactive")}
+                    </span>
+                  )}
+
+                  {/* View button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 gap-1 px-2.5 text-xs"
+                    nativeButton={false}
+                    render={<Link href={`/events/${encodeURIComponent(row.id)}`}>{t("view")}</Link>}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination footer */}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-border/60 px-4 py-3">
+            <p className="text-xs text-muted-foreground">
+              {t("page")} {page} / {totalPages}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button" variant="outline" size="sm"
+                className="h-8 gap-1 px-2.5 text-xs"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="size-3.5 rtl:rotate-180" />
+                {t("prev")}
+              </Button>
+              <Button
+                type="button" variant="outline" size="sm"
+                className="h-8 gap-1 px-2.5 text-xs"
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                {t("next")}
+                <ChevronRight className="size-3.5 rtl:rotate-180" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ══ Create dialog ════════════════════════════════════════════════════ */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-[760px]">
-          <DialogHeader className="pb-1">
+        <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden sm:max-w-[700px]">
+          <DialogHeader className="shrink-0 pb-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
-                <CalendarClock className="size-3.5 text-muted-foreground" aria-hidden />
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
+                <CalendarClock className="size-3.5 text-muted-foreground" />
               </div>
               {t("dialogCreateTitle")}
             </DialogTitle>
-            <DialogDescription className="text-xs">{t("dialogCreateDescription")}</DialogDescription>
+            <DialogDescription className="text-xs">
+              {t("dialogCreateDescription")}
+            </DialogDescription>
           </DialogHeader>
-
           <Separator />
 
-          <div className="grid max-h-[62vh] gap-4 overflow-y-auto py-1 pr-1">
-            {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="grid gap-5 py-4 pr-1">
+              {createError && (
+                <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  {createError}
+                </p>
+              )}
 
-            <div className="grid gap-3 rounded-lg border bg-muted/10 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("sectionBase")}</p>
+              {/* Base fields */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("sectionBase")}
+                </p>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="grid gap-1.5">
-                  <Label className="text-sm">{t("fieldSlug")}</Label>
-                  <Input value={form.slug} onChange={(e) => setForm((s) => ({ ...s, slug: e.target.value }))} placeholder={t("placeholderSlug")} />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5">
-                  <Label className="text-sm font-medium">{t("fieldIsActive")}</Label>
-                  <Switch checked={form.isActive} onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <NewsDateTimePicker
-                  value={form.startsAt}
-                  onChange={(next) => setForm((s) => ({ ...s, startsAt: next }))}
-                  required
-                  error={null}
-                  className="sm:col-span-1"
-                />
-                <NewsDateTimePicker
-                  value={form.endsAt}
-                  onChange={(next) => setForm((s) => ({ ...s, endsAt: next }))}
-                  required={false}
-                  error={null}
-                  className="sm:col-span-1"
-                />
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label className="text-sm">{t("fieldImage")}</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
-                <p className="text-xs text-muted-foreground">{t("imageHint")}</p>
-              </div>
-            </div>
-
-            <div className="grid gap-2 rounded-lg border bg-muted/10 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("translationsLabel")}</p>
-                <Badge variant="secondary" className="text-xs font-normal">{t("required")}</Badge>
-              </div>
-
-              {(["en", "ar"] as const).map((loc) => {
-                const dir = loc === "ar" ? "rtl" : "ltr";
-                const langLabel = loc === "en" ? t("langEn") : t("langAr");
-                const v = form.translations[loc];
-                return (
-                  <div key={loc} className="rounded-lg border bg-background p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-xs font-medium text-muted-foreground">{langLabel}</p>
-                      <Badge variant="outline" className="text-xs font-normal text-muted-foreground">{loc.toUpperCase()}</Badge>
-                    </div>
-
-                    <div className="grid gap-3">
-                      <div className="grid gap-1.5">
-                        <Label className="flex items-center gap-1.5 text-sm font-medium">
-                          <Text className="size-3 text-muted-foreground" aria-hidden />
-                          {t("fieldTitle")}
-                        </Label>
-                        <Input dir={dir} value={v.title} onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], title: e.target.value } } }))} />
-                      </div>
-                      <div className="grid gap-1.5">
-                        <Label className="flex items-center gap-1.5 text-sm font-medium">
-                          <FileText className="size-3 text-muted-foreground" aria-hidden />
-                          {t("fieldSubtitle")}
-                        </Label>
-                        <Input dir={dir} value={v.subtitle} onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], subtitle: e.target.value } } }))} />
-                      </div>
-                      <div className="grid gap-1.5">
-                        <Label className="flex items-center gap-1.5 text-sm font-medium">
-                          <FileText className="size-3 text-muted-foreground" aria-hidden />
-                          {t("fieldDescription")}
-                        </Label>
-                        <Textarea dir={dir} rows={4} value={v.description} onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], description: e.target.value } } }))} className="resize-none text-sm" />
-                      </div>
-                    </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {t("fieldSlug")}
+                    </Label>
+                    <Input
+                      value={form.slug}
+                      onChange={(e) => setForm((s) => ({ ...s, slug: e.target.value }))}
+                      placeholder={t("placeholderSlug")}
+                      className="h-9"
+                    />
                   </div>
-                );
-              })}
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
+                    <div>
+                      <Label className="text-sm font-medium">{t("fieldIsActive")}</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {form.isActive ? t("active") : t("inactive")}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={form.isActive}
+                      onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {t("startsAtLabel")} *
+                    </Label>
+                    <NewsDateTimePicker
+                      value={form.startsAt}
+                      onChange={(next) => setForm((s) => ({ ...s, startsAt: next }))}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      {t("endsAtLabel")}
+                    </Label>
+                    <NewsDateTimePicker
+                      value={form.endsAt}
+                      onChange={(next) => setForm((s) => ({ ...s, endsAt: next }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Image upload */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("fieldImage")}
+                </Label>
+                <label
+                  htmlFor="event-create-image"
+                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30"
+                >
+                  <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted shadow-sm transition-colors group-hover:bg-background">
+                    {imageFile ? (
+                      <ImageIcon className="size-5 text-foreground" />
+                    ) : (
+                      <Upload className="size-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  {imageFile ? (
+                    <div>
+                      <p className="text-sm font-medium">{imageFile.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(imageFile.size / 1024).toFixed(1)} KB · {t("clickToReplace")}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium">{t("clickToUpload")}</p>
+                      <p className="text-xs text-muted-foreground">{t("imageHint")}</p>
+                    </div>
+                  )}
+                  <Input
+                    id="event-create-image"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
+
+              {/* Translations */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t("translationsLabel")}
+                  </p>
+                  <Badge variant="secondary" className="text-xs">{t("required")}</Badge>
+                </div>
+                {(["en", "ar"] as const).map((loc) => {
+                  const dir = loc === "ar" ? "rtl" : "ltr";
+                  const v = form.translations[loc];
+                  return (
+                    <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold">
+                          {loc === "en" ? t("langEn") : t("langAr")}
+                        </p>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          {loc}
+                        </span>
+                      </div>
+                      <div className="grid gap-3">
+                        {(
+                          [
+                            { key: "title" as const, label: t("fieldTitle"), type: "input" },
+                            { key: "subtitle" as const, label: t("fieldSubtitle"), type: "input" },
+                            { key: "description" as const, label: t("fieldDescription"), type: "textarea", rows: 4 },
+                          ] as const
+                        ).map(({ key, label, type, ...rest }) => (
+                          <div key={key} className="grid gap-1.5">
+                            <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                              {label}
+                            </Label>
+                            {type === "textarea" ? (
+                              <Textarea
+                                dir={dir}
+                                rows={"rows" in rest ? (rest as { rows: number }).rows : 4}
+                                value={v[key]}
+                                className="resize-none text-sm"
+                                onChange={(e) =>
+                                  setForm((s) => ({
+                                    ...s,
+                                    translations: {
+                                      ...s.translations,
+                                      [loc]: { ...s.translations[loc], [key]: e.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            ) : (
+                              <Input
+                                dir={dir}
+                                value={v[key]}
+                                className="h-9"
+                                onChange={(e) =>
+                                  setForm((s) => ({
+                                    ...s,
+                                    translations: {
+                                      ...s.translations,
+                                      [loc]: { ...s.translations[loc], [key]: e.target.value },
+                                    },
+                                  }))
+                                }
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          <Separator />
-
-          <DialogFooter className="gap-2 pt-1 sm:gap-2">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => setCreateOpen(false)}>
+          <Separator className="shrink-0" />
+          <DialogFooter className="shrink-0 gap-2 pt-2">
+            <Button
+              type="button" variant="outline" disabled={submitting}
+              onClick={() => setCreateOpen(false)}
+            >
               {t("cancel")}
             </Button>
-            <Button type="button" disabled={createDisabled} onClick={() => void onCreate()} className="gap-1.5">
-              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+            <Button
+              type="button" disabled={createDisabled}
+              onClick={() => void onCreate()} className="min-w-24 gap-1.5"
+            >
+              {submitting ? (
+                <RefreshCw className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
               {t("create")}
             </Button>
           </DialogFooter>
@@ -465,4 +595,3 @@ export function EventsPanel() {
     </div>
   );
 }
-

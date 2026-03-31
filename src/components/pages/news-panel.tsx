@@ -107,13 +107,14 @@ const createNewsSchema = z.object({
     .refine(
       (f) => ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(f.type),
       { message: "badType" }
-    ),
+    )
+    .optional(),
 });
 
 function validateCreate(values: { dateTime: Date | null; imageFile: File | null }) {
   const parsed = createNewsSchema.safeParse({
     dateTime: values.dateTime ?? undefined,
-    imageFile: values.imageFile ?? undefined,
+      imageFile: values.imageFile ?? undefined,
   });
   if (parsed.success) return { ok: true as const };
   const next: CreateFormErrors = {};
@@ -276,7 +277,7 @@ export function NewsPanel() {
         ...(vErrors.image ? {
           image: vErrors.image === "maxSize" ? t("imageMaxSize")
             : vErrors.image === "badType" ? t("imageBadType")
-              : `${t("fieldImage")} is required`,
+              : t("imageBadType"),
         } : {}),
       });
       return;
@@ -285,7 +286,7 @@ export function NewsPanel() {
     const fd = new FormData();
     fd.append("date", form.dateTime!.toISOString());
     fd.append("isActive", form.isActive ? "1" : "0");
-    fd.append("image", imageFile!);
+    if (imageFile) fd.append("image", imageFile);
     const payload = (["en", "ar"] as const).reduce((acc, loc) => {
       const tt = form.translations[loc];
       acc[loc] = {
@@ -673,7 +674,7 @@ export function NewsPanel() {
               {/* Image upload */}
               <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {t("fieldImage")} <span className="text-destructive normal-case">*</span>
+                  {t("fieldImage")}
                 </Label>
                 <label htmlFor="news-image"
                   className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30">
@@ -688,7 +689,7 @@ export function NewsPanel() {
                   ) : (
                     <div>
                       <p className="text-sm font-medium">{t("clickToUpload")}</p>
-                      <p className="text-xs text-muted-foreground">PNG, JPG, WEBP up to 5 MB</p>
+                      <p className="text-xs text-muted-foreground">{t("imageOptionalHint")}</p>
                     </div>
                   )}
                   <Input id="news-image" type="file" accept="image/*" className="sr-only"

@@ -300,3 +300,8 @@ export async function deleteNews(id: string): Promise<void> {
   await readApiData<unknown>(res);
 }
 
+export async function deleteNewsImage(id: string): Promise<void> {
+  const res = await apiFetch(`/api/news/${encodeURIComponent(id)}/image`, { method: "DELETE" });
+  await readApiData<unknown>(res);
+}
+

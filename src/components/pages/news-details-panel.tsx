@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Trash2,
   Upload,
+  X,
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,7 +21,7 @@ import { toast } from "sonner";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/toast-api-error";
-import { deleteNews, fetchNewsById, updateNews, type NewsItem } from "@/lib/news-api";
+import { deleteNews, deleteNewsImage, fetchNewsById, updateNews, type NewsItem } from "@/lib/news-api";
 import { NewsDateTimePicker } from "@/components/news-date-time-picker";
 
 import { Badge } from "@/components/ui/badge";
@@ -158,6 +159,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [removeImageOpen, setRemoveImageOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -263,6 +265,20 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     }
   }
 
+  async function onRemoveImage() {
+    setSubmitting(true);
+    try {
+      await deleteNewsImage(id);
+      toast.success(t("removeImageSuccess"));
+      setRemoveImageOpen(false);
+      await load();
+    } catch (e) {
+      toastApiError(e, t("removeImageError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const bestTitle = (() => {
     if (!news) return "—";
     const want = locale === "ar" ? "ar" : "en";
@@ -273,6 +289,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
   })();
 
   const supported = new Set((news?.translations ?? []).map((x) => x.locale));
+  const image = news?.image?.trim() ? news.image : null;
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (loading) {
@@ -368,9 +385,9 @@ export function NewsDetailsPanel({ id }: { id: string }) {
       <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
         {/* Image banner */}
         <div className="relative h-44 bg-muted sm:h-56">
-          {news.image ? (
+          {image ? (
             <img
-              src={news.image}
+              src={image}
               alt={bestTitle}
               className="h-full w-full object-cover"
               loading="lazy"
@@ -385,7 +402,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
             </div>
           )}
           {/* Status pill overlay */}
-          <div className="absolute right-3 top-3">
+          <div className="absolute right-3 top-3 flex gap-2">
             {news.isActive !== false ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
                 <CheckCircle2 className="size-3" />
@@ -397,6 +414,18 @@ export function NewsDetailsPanel({ id }: { id: string }) {
                 {tCommon("statusInactive")}
               </span>
             )}
+
+            {image ? (
+              <button
+                type="button"
+                onClick={() => setRemoveImageOpen(true)}
+                disabled={submitting}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-background/90 px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur transition-colors hover:border-destructive/50 hover:text-destructive"
+              >
+                <X className="size-3" aria-hidden />
+                {t("removeImage")}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -851,6 +880,43 @@ export function NewsDetailsPanel({ id }: { id: string }) {
                 <Trash2 className="size-3.5" />
               )}
               {t("deleteConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove image */}
+      <Dialog open={removeImageOpen} onOpenChange={setRemoveImageOpen}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5">
+                <X className="size-3.5 text-destructive" aria-hidden />
+              </div>
+              {t("removeImageTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {t("removeImageDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting}
+              onClick={() => setRemoveImageOpen(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={submitting}
+              onClick={() => void onRemoveImage()}
+              className="gap-1.5"
+            >
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+              {t("confirmRemoveImage")}
             </Button>
           </DialogFooter>
         </DialogContent>

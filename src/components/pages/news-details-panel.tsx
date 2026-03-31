@@ -1,29 +1,30 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState, type ReactNode } from "react";
-import { toast } from "sonner";
-import { toastApiError } from "@/lib/toast-api-error";
 import {
   ArrowLeft,
   CalendarDays,
-  FileText,
+  CheckCircle2,
+  Globe,
   Image as ImageIcon,
   Newspaper,
   Pencil,
-  Save,
-  Tag,
-  Text,
+  RefreshCw,
   Trash2,
-  X,
+  Upload,
+  XCircle,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { toast } from "sonner";
+
+import { Link, useRouter } from "@/i18n/navigation";
+import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/toast-api-error";
+import { deleteNews, fetchNewsById, updateNews, type NewsItem } from "@/lib/news-api";
+import { NewsDateTimePicker } from "@/components/news-date-time-picker";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -34,85 +35,118 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { Link, useRouter } from "@/i18n/navigation";
-import { NewsDateTimePicker } from "@/components/news-date-time-picker";
-import { deleteNews, fetchNewsById, pickBestTranslation, updateNews } from "@/lib/news-api";
-import type { NewsItem } from "@/lib/news-api";
-import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 
-type EditFormState = {
-  dateTime: Date | null;
-  isActive: boolean;
-  translations: {
-    en: { title: string; subtitle: string; description: string; subDescription: string };
-    ar: { title: string; subtitle: string; description: string; subDescription: string };
-  };
-  tagsByLocale: { en: string; ar: string };
-};
-
-function safeDate(v: string | null | undefined): Date | null {
-  if (!v) return null;
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+function Section({
+  icon: Icon,
+  title,
+  description,
+  badge,
+  actions,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  description?: string;
+  badge?: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+      <div className="flex flex-col gap-3 border-b border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-background shadow-sm">
+            <Icon className="size-4 text-muted-foreground" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-foreground">{title}</p>
+              {badge}
+            </div>
+            {description && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+            )}
+          </div>
+        </div>
+        {actions && (
+          <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        )}
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
 }
 
-function parseTags(tags: string[] | null | undefined): string {
-  if (!tags || tags.length === 0) return "";
-  return tags.join(", ");
+// ─── Info field ───────────────────────────────────────────────────────────────
+function InfoField({
+  label,
+  value,
+  dir,
+}: {
+  label: string;
+  value?: string | null;
+  dir?: string;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+        {label}
+      </p>
+      <p className="text-sm font-medium text-foreground" dir={dir}>
+        {value ?? "—"}
+      </p>
+    </div>
+  );
 }
 
-function safeString(v: string | null | undefined): string {
-  return typeof v === "string" ? v : "";
+// ─── Types & helpers ──────────────────────────────────────────────────────────
+type Locale = "en" | "ar";
+type TranslationsForm = Record<
+  Locale,
+  { title: string; subtitle: string; description: string; subDescription: string; tags: string }
+>;
+
+function emptyTranslations(): TranslationsForm {
+  const empty = { title: "", subtitle: "", description: "", subDescription: "", tags: "" };
+  return { en: { ...empty }, ar: { ...empty } };
 }
 
-function emptyTranslations() {
-  return {
-    en: { title: "", subtitle: "", description: "", subDescription: "" },
-    ar: { title: "", subtitle: "", description: "", subDescription: "" },
-  };
+function translationsFromItem(item: NewsItem): TranslationsForm {
+  const base = emptyTranslations();
+  for (const tr of item.translations ?? []) {
+    if (tr.locale !== "en" && tr.locale !== "ar") continue;
+    base[tr.locale] = {
+      title: tr.title ?? "",
+      subtitle: tr.subtitle ?? "",
+      description: tr.description ?? "",
+      subDescription: tr.subDescription ?? "",
+      tags: (tr.tags ?? []).join(", "),
+    };
+  }
+  return base;
 }
 
 function parseCommaTags(input: string): string[] {
-  return input
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return input.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-function hasAnyTranslation(tr: ReturnType<typeof emptyTranslations>): boolean {
-  const values = [
-    tr.en.title,
-    tr.en.subtitle,
-    tr.en.description,
-    tr.en.subDescription,
-    tr.ar.title,
-    tr.ar.subtitle,
-    tr.ar.description,
-    tr.ar.subDescription,
-  ];
-  return values.some((v) => v.trim().length > 0);
-}
-
-function hasBothTranslationsRequired(
-  tr: ReturnType<typeof emptyTranslations>,
-  tagsByLocale: { en: string; ar: string }
-): boolean {
+function hasBothLocalesRequired(tr: TranslationsForm): boolean {
   return (["en", "ar"] as const).every((loc) => {
-    const t = tr[loc];
-    const tags = parseCommaTags(tagsByLocale[loc]);
+    const v = tr[loc];
     return (
-      t.title.trim().length > 0 &&
-      t.description.trim().length > 0 &&
-      tags.length > 0
+      v.title.trim().length > 0 &&
+      v.description.trim().length > 0 &&
+      parseCommaTags(v.tags).length > 0
     );
   });
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function NewsDetailsPanel({ id }: { id: string }) {
   const t = useTranslations("NewsDetailsPage");
   const tCommon = useTranslations("NewsPage");
@@ -121,87 +155,44 @@ export function NewsDetailsPanel({ id }: { id: string }) {
 
   const [loading, setLoading] = useState(true);
   const [news, setNews] = useState<NewsItem | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [form, setForm] = useState<EditFormState>({
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [form, setForm] = useState<{
+    dateTime: Date | null;
+    isActive: boolean;
+    translations: TranslationsForm;
+  }>({
     dateTime: null,
     isActive: true,
     translations: emptyTranslations(),
-    tagsByLocale: { en: "", ar: "" },
   });
-  const [updateError, setUpdateError] = useState<string | null>(null);
 
-  function renderStatusBadge(isActive?: boolean) {
-    if (isActive === false) {
-      return (
-        <Badge
-          variant="outline"
-          className="rounded-full border-muted-foreground/30 px-2.5 py-0.5 text-xs font-normal text-muted-foreground"
-        >
-          {tCommon("statusInactive")}
-        </Badge>
-      );
-    }
-    return (
-      <Badge className="rounded-full border-emerald-600/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-normal text-emerald-700 dark:text-emerald-400">
-        {tCommon("statusActive")}
-      </Badge>
-    );
-  }
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const item = await fetchNewsById(id);
       setNews(item);
-      const enT = item.translations?.find((x) => x.locale === "en") ?? null;
-      const arT = item.translations?.find((x) => x.locale === "ar") ?? null;
+      setImageFile(null);
+      const d = item.date ? new Date(item.date) : null;
       setForm({
-        dateTime: safeDate(item.date),
+        dateTime: d && !Number.isNaN(d.getTime()) ? d : null,
         isActive: item.isActive !== false,
-        translations: {
-          en: {
-            title: safeString(enT?.title),
-            subtitle: safeString(enT?.subtitle),
-            description: safeString(enT?.description),
-            subDescription: safeString(enT?.subDescription),
-          },
-          ar: {
-            title: safeString(arT?.title),
-            subtitle: safeString(arT?.subtitle),
-            description: safeString(arT?.description),
-            subDescription: safeString(arT?.subDescription),
-          },
-        },
-        tagsByLocale: {
-          en: parseTags(enT?.tags),
-          ar: parseTags(arT?.tags),
-        },
+        translations: translationsFromItem(item),
       });
     } catch (e) {
       toastApiError(e, t("loadError"));
-      setError(t("loadError"));
       setNews(null);
     } finally {
       setLoading(false);
     }
-  }
+  }, [id, t]);
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  useEffect(() => {
-    setImageLoadFailed(false);
-  }, [news?.id, news?.image]);
+  useEffect(() => { void load(); }, [load]);
 
   function formatDate(value?: string | null): string {
     if (!value) return "—";
@@ -214,42 +205,38 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     }
   }
 
-  async function onUpdate() {
-    if (!news) return;
-    const translationsOk = hasBothTranslationsRequired(
-      form.translations,
-      form.tagsByLocale
-    );
-    if (!translationsOk) {
-      setUpdateError(tCommon("translationsBothRequired"));
+  const saveDisabled = useMemo(
+    () => submitting || !hasBothLocalesRequired(form.translations),
+    [form.translations, submitting],
+  );
+
+  async function onSave() {
+    setFormError(null);
+    if (!hasBothLocalesRequired(form.translations)) {
+      setFormError(tCommon("translationsBothRequired"));
       return;
     }
-
     setSubmitting(true);
     try {
-      setUpdateError(null);
       const fd = new FormData();
       if (form.dateTime) fd.append("date", form.dateTime.toISOString());
-      // Backend accepts boolean-like: true/false/1/0 — use 1/0 for consistency.
       fd.append("isActive", form.isActive ? "1" : "0");
       if (imageFile) fd.append("image", imageFile);
-      const payload: Record<string, unknown> = (["en", "ar"] as const).reduce(
+      const payload = (["en", "ar"] as const).reduce(
         (acc, loc) => {
           const tt = form.translations[loc];
-          const tags = parseCommaTags(form.tagsByLocale[loc]);
           acc[loc] = {
             title: tt.title.trim(),
             subtitle: tt.subtitle.trim(),
             description: tt.description.trim(),
             subDescription: tt.subDescription.trim(),
-            tags,
+            tags: parseCommaTags(tt.tags),
           };
           return acc;
         },
-        {} as Record<string, unknown>
+        {} as Record<string, unknown>,
       );
       fd.append("translations", JSON.stringify(payload));
-
       await updateNews(id, fd);
       toast.success(tCommon("updateSuccess"));
       setEditOpen(false);
@@ -263,260 +250,331 @@ export function NewsDetailsPanel({ id }: { id: string }) {
   }
 
   async function onDelete() {
-    if (!news) return;
-    setDeleting(true);
+    setSubmitting(true);
     try {
       await deleteNews(id);
       toast.success(t("deleteSuccess"));
       setDeleteOpen(false);
-      router.push("/news");
+      router.replace("/news");
     } catch (e) {
       toastApiError(e, t("deleteError"));
     } finally {
-      setDeleting(false);
+      setSubmitting(false);
     }
   }
 
+  const bestTitle = (() => {
+    if (!news) return "—";
+    const want = locale === "ar" ? "ar" : "en";
+    const tr =
+      news.translations?.find((x) => x.locale === want) ??
+      news.translations?.[0];
+    return tr?.title?.trim() ? tr.title : "—";
+  })();
+
+  const supported = new Set((news?.translations ?? []).map((x) => x.locale));
+
+  // ── Loading skeleton ───────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8">
-        <Card className="overflow-hidden border shadow-sm">
-          <CardHeader className="pb-4">
-            <Skeleton className="h-7 w-56" />
-            <Skeleton className="mt-1.5 h-4 w-72" />
-            <div className="mt-3 flex gap-2">
-              <Skeleton className="h-5 w-16 rounded-full" />
-              <Skeleton className="h-5 w-24 rounded-full" />
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-0">
-            <Skeleton className="h-44 w-full rounded-lg" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-[85%]" />
-              <Skeleton className="h-4 w-[65%]" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!news || error) {
-    return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8">
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
-      </div>
-    );
-  }
-
-  const tr = pickBestTranslation(news, locale);
-  const title = tr?.title ?? "—";
-  const subtitle = tr?.subtitle ?? "";
-  const description = tr?.description ?? "";
-  const subDescription = tr?.subDescription ?? "";
-  const tags = tr?.tags ?? [];
-  const supported = new Set((news.translations ?? []).map((x) => x.locale));
-
-  return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 md:px-8">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-8 gap-1.5 px-2.5 text-xs"
-        nativeButton={false}
-        render={
-          <Link
-            href="/news"
-            className="flex items-center gap-1.5 rtl:flex-row-reverse"
-          >
-            <ArrowLeft className="size-3.5 rtl:rotate-180" aria-hidden />
-            {t("back")}
-          </Link>
-        }
-      />
-      <Card className="overflow-hidden border shadow-sm">
-        
-        {/* ── Header ─────────────────────────────────────────── */}
-        <CardHeader className="border-b bg-card px-6 py-5">
-          
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-
-            {/* Left: meta */}
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                {renderStatusBadge(news.isActive)}
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <CalendarDays className="size-3" />
-                  {formatDate(news.date)}
-                </span>
-              </div>
-              <h1 className="mt-2 text-xl font-semibold leading-snug tracking-tight">
-                {title}
-              </h1>
-              {subtitle ? (
-                <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-              ) : null}
-            </div>
-
-            {/* Right: actions */}
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Button
-                variant="destructive"
-                size="sm"
-                className="h-8 gap-1.5 px-3 text-xs"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 className="size-3.5" />
-                {t("delete")}
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 gap-1.5 px-3 text-xs"
-                onClick={() => setEditOpen(true)}
-              >
-                <Pencil className="size-3.5" />
-                {t("edit")}
-              </Button>
+      <div className="mx-auto w-full max-w-4xl space-y-4 px-3 py-5 sm:px-6 sm:py-8">
+        <div className="flex items-center justify-between gap-3">
+          <Skeleton className="h-8 w-28" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-8 w-16" />
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+          <Skeleton className="h-48 w-full sm:h-56" />
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-32" />
+            <div className="grid grid-cols-3 gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 rounded-xl" />
+              ))}
             </div>
           </div>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+          <div className="border-b border-border/60 bg-muted/30 px-4 py-3">
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="grid gap-3 p-4 sm:grid-cols-2">
+            <Skeleton className="h-48 rounded-xl" />
+            <Skeleton className="h-48 rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+  // ── Empty state ────────────────────────────────────────────────────────────
+  if (!news) {
+    return (
+      <div className="mx-auto w-full max-w-4xl px-3 py-5 sm:px-6 sm:py-8">
+        <div className="rounded-2xl border border-dashed border-border bg-muted/20 py-20 text-center">
+          <Newspaper className="mx-auto size-10 text-muted-foreground/30" />
+          <p className="mt-3 text-sm font-medium">{t("empty")}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-4xl space-y-4 px-3 py-5 sm:px-6 sm:py-8">
+
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="-ms-2 gap-1.5 text-muted-foreground hover:text-foreground"
+          nativeButton={false}
+          render={
+            <Link href="/news">
+              <ArrowLeft className="size-4 rtl:rotate-180" />
+              {t("back")}
+            </Link>
+          }
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setEditOpen(true)}
+          >
+            <Pencil className="size-3.5" />
+            <span className="hidden sm:inline">{t("edit")}</span>
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="size-3.5" />
+            <span className="hidden sm:inline">{t("delete")}</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Hero card ─────────────────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        {/* Image banner */}
+        <div className="relative h-44 bg-muted sm:h-56">
+          {news.image ? (
+            <img
+              src={news.image}
+              alt={bestTitle}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <ImageIcon className="size-10 text-muted-foreground/20" />
+            </div>
+          )}
+          {/* Status pill overlay */}
+          <div className="absolute right-3 top-3">
+            {news.isActive !== false ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+                <CheckCircle2 className="size-3" />
+                {tCommon("statusActive")}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/90 px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+                <XCircle className="size-3" />
+                {tCommon("statusInactive")}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Identity */}
+        <div className="border-b border-border/60 px-4 py-4 sm:px-5">
+          <h1 className="truncate text-lg font-bold tracking-tight text-foreground sm:text-xl">
+            {bestTitle}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <CalendarDays className="size-3" />
+              {formatDate(news.date)}
+            </span>
             {(["en", "ar"] as const).map((loc) => (
               <Badge
                 key={loc}
                 variant={supported.has(loc) ? "secondary" : "outline"}
                 className={cn(
-                  "rounded-full px-2.5 py-0.5 text-xs font-normal",
-                  !supported.has(loc) && "text-muted-foreground"
+                  "rounded-full px-2 py-0 text-[10px] font-semibold uppercase",
+                  !supported.has(loc) && "text-muted-foreground",
                 )}
               >
-                {loc.toUpperCase()}
+                {loc}
               </Badge>
             ))}
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-6 p-6">
-          {news.image ? (
-            <div className="flex justify-start">
-              {!imageLoadFailed ? (
-                <div className="relative w-full max-w-xl overflow-hidden rounded-lg border bg-muted">
-                  <div className="relative aspect-video w-full">
-                    <img
-                      src={news.image}
-                      alt={
-                        title ? `${t("imageAlt")}: ${title}` : t("imageAlt")
-                      }
-                      className="absolute inset-0 h-full w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                      onError={() => setImageLoadFailed(true)}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div
-                  role="img"
-                  aria-label={t("imageBroken")}
-                  className="flex aspect-video w-full max-w-xl flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/40 px-6 text-center"
-                >
-                  <ImageIcon className="size-10 text-muted-foreground/50" aria-hidden />
-                  <p className="text-sm text-muted-foreground">{t("imageBroken")}</p>
-                </div>
-              )}
+        {/* Quick stats */}
+        <div className="grid grid-cols-3 divide-x divide-border/60">
+          {[
+            {
+              icon: CalendarDays,
+              label: tCommon("fieldDate"),
+              value: formatDate(news.date),
+            },
+            {
+              icon: CheckCircle2,
+              label: tCommon("fieldIsActive"),
+              value:
+                news.isActive !== false
+                  ? tCommon("statusActive")
+                  : tCommon("statusInactive"),
+            },
+            {
+              icon: Globe,
+              label: t("translationsLabel"),
+              value: `${supported.size} / 2`,
+            },
+          ].map(({ icon: Icon, label, value }) => (
+            <div key={label} className="flex items-start gap-2.5 px-4 py-3">
+              <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/60" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                  {label}
+                </p>
+                <p className="mt-0.5 truncate text-sm font-medium text-foreground">
+                  {value ?? "—"}
+                </p>
+              </div>
             </div>
-          ) : null}
+          ))}
+        </div>
+      </div>
 
-          {/* Body text */}
-          <div className="space-y-4">
-            {(["en", "ar"] as const).map((loc) => {
-              const tRow =
-                news.translations?.find((x) => x.locale === loc) ?? null;
-              if (!tRow) return null;
-              return (
-                <div key={loc} className="rounded-lg border bg-muted/10 p-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {loc.toUpperCase()}
-                    </p>
-                    <Badge variant="secondary" className="text-xs font-normal">
-                      {loc === "en" ? tCommon("langEn") : tCommon("langAr")}
-                    </Badge>
-                  </div>
-                  <p
-                    className={cn(
-                      "text-sm font-semibold leading-snug",
-                      loc === "ar" && "text-right"
-                    )}
-                    dir={loc === "ar" ? "rtl" : "ltr"}
-                  >
-                    {tRow.title}
+      {/* ── Translations section ─────────────────────────────────────────── */}
+      <Section
+        icon={Globe}
+        title={t("translationsLabel")}
+        badge={
+          <div className="flex gap-1">
+            {(["en", "ar"] as const).map((loc) => (
+              <span
+                key={loc}
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                  supported.has(loc)
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                {loc}
+              </span>
+            ))}
+          </div>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(["en", "ar"] as const).map((loc) => {
+            const tr = news.translations?.find((x) => x.locale === loc) ?? null;
+            const dir = loc === "ar" ? "rtl" : "ltr";
+            return (
+              <div
+                key={loc}
+                className="rounded-xl border border-border/60 bg-background p-4"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-foreground">
+                    {loc === "en" ? tCommon("langEn") : tCommon("langAr")}
                   </p>
-                  {tRow.subtitle ? (
-                    <p
-                      className={cn(
-                        "mt-1 text-sm text-muted-foreground",
-                        loc === "ar" && "text-right"
-                      )}
-                      dir={loc === "ar" ? "rtl" : "ltr"}
-                    >
-                      {tRow.subtitle}
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                      tr
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {loc}
+                  </span>
+                </div>
+                <div className="space-y-3" dir={dir}>
+                  <InfoField
+                    label={tCommon("fieldTitle")}
+                    value={tr?.title?.trim() ? tr.title : undefined}
+                    dir={dir}
+                  />
+                  <InfoField
+                    label={tCommon("fieldSubtitle")}
+                    value={tr?.subtitle?.trim() ? tr.subtitle : undefined}
+                    dir={dir}
+                  />
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                      {tCommon("fieldDescription")}
                     </p>
-                  ) : null}
-
-                  <div className="mt-3 space-y-2">
-                    <p
-                      className={cn(
-                        "text-sm leading-relaxed whitespace-pre-wrap",
-                        loc === "ar" && "text-right"
-                      )}
-                      dir={loc === "ar" ? "rtl" : "ltr"}
-                    >
-                      {tRow.description}
+                    <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>
+                      {tr?.description?.trim() ? tr.description : "—"}
                     </p>
-                    {tRow.subDescription ? (
-                      <p
-                        className={cn(
-                          "text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap",
-                          loc === "ar" && "text-right"
-                        )}
-                        dir={loc === "ar" ? "rtl" : "ltr"}
-                      >
-                        {tRow.subDescription}
-                      </p>
-                    ) : null}
                   </div>
-
-                  {Array.isArray(tRow.tags) && tRow.tags.length > 0 ? (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {tRow.tags.map((tag) => (
-                        <Badge
-                          key={`${loc}-${tag}`}
-                          variant="secondary"
-                          className="rounded-full px-2.5 py-0.5 text-xs font-normal"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
+                  {tr?.subDescription?.trim() ? (
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                        {tCommon("fieldSubDescription")}
+                      </p>
+                      <p
+                        className="whitespace-pre-wrap text-sm text-muted-foreground"
+                        dir={dir}
+                      >
+                        {tr.subDescription}
+                      </p>
                     </div>
                   ) : null}
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                      {tCommon("fieldTags")}
+                    </p>
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {(tr?.tags ?? []).length > 0 ? (
+                        tr!.tags!.map((tag, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
+        </div>
+      </Section>
 
-          {/* Tags are shown per translation above */}
-        </CardContent>
-      </Card>
+      {/* ══ DIALOGS ════════════════════════════════════════════════════════════ */}
 
-      {/* ── Edit Dialog ────────────────────────────────────── */}
+      {/* Edit */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader className="pb-1">
+        <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden sm:max-w-[700px]">
+          <DialogHeader className="shrink-0 pb-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
-                <Newspaper className="size-3.5 text-muted-foreground" />
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
+                <Pencil className="size-3.5 text-muted-foreground" />
               </div>
               {t("dialogEditTitle")}
             </DialogTitle>
@@ -524,266 +582,240 @@ export function NewsDetailsPanel({ id }: { id: string }) {
               {t("dialogEditDescription")}
             </DialogDescription>
           </DialogHeader>
-
           <Separator />
-
-          <div className="grid max-h-[58vh] gap-3.5 overflow-y-auto py-1 pr-1">
-            {updateError ? (
-              <p className="text-xs text-destructive">{updateError}</p>
-            ) : null}
-            <div className="grid gap-2 rounded-lg border bg-muted/10 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {tCommon("translationsLabel")}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="grid gap-5 py-4 pr-1">
+              {formError && (
+                <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  {formError}
                 </p>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs font-normal">
+              )}
+
+              {/* Base fields */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("sectionBase")}
+                </p>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {tCommon("fieldDate")}
+                  </Label>
+                  <NewsDateTimePicker
+                    value={form.dateTime}
+                    onChange={(next) =>
+                      setForm((s) => ({ ...s, dateTime: next }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
+                  <div>
+                    <Label className="text-sm font-medium">
+                      {tCommon("fieldIsActive")}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {form.isActive
+                        ? tCommon("statusActive")
+                        : tCommon("statusInactive")}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.isActive}
+                    onCheckedChange={(v) =>
+                      setForm((s) => ({ ...s, isActive: v }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Image upload */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {tCommon("fieldImage")}
+                </Label>
+                <label
+                  htmlFor="news-image-edit"
+                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30"
+                >
+                  <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted shadow-sm transition-colors group-hover:bg-background">
+                    {imageFile ? (
+                      <ImageIcon className="size-5 text-foreground" />
+                    ) : (
+                      <Upload className="size-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  {imageFile ? (
+                    <div>
+                      <p className="text-sm font-medium">{imageFile.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(imageFile.size / 1024).toFixed(1)} KB ·{" "}
+                        {tCommon("clickToReplace")}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium">
+                        {tCommon("clickToUpload")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {t("imageOptionalHint")}
+                      </p>
+                    </div>
+                  )}
+                  <Input
+                    id="news-image-edit"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) =>
+                      setImageFile(e.target.files?.[0] ?? null)
+                    }
+                  />
+                </label>
+              </div>
+
+              {/* Translations */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {tCommon("translationsLabel")}
+                  </p>
+                  <Badge variant="secondary" className="text-xs">
                     {tCommon("required")}
                   </Badge>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                <div className="grid gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">{tCommon("langEn")}</p>
-                  <Input
-                    value={form.translations.en.title}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, title: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldTitle")} (${tCommon("langEn")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    value={form.translations.en.subtitle}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, subtitle: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldSubtitle")} (${tCommon("langEn")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Textarea
-                    rows={2}
-                    value={form.translations.en.description}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, description: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldDescription")} (${tCommon("langEn")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Textarea
-                    rows={2}
-                    value={form.translations.en.subDescription}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, subDescription: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldSubDescription")} (${tCommon("langEn")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Input
-                    value={form.tagsByLocale.en}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        tagsByLocale: { ...s.tagsByLocale, en: e.target.value },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldTags")} (${tCommon("langEn")})`}
-                    className="h-8 text-sm"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">{tCommon("langAr")}</p>
-                  <Input
-                    dir="rtl"
-                    value={form.translations.ar.title}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, title: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldTitle")} (${tCommon("langAr")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    dir="rtl"
-                    value={form.translations.ar.subtitle}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, subtitle: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldSubtitle")} (${tCommon("langAr")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Textarea
-                    dir="rtl"
-                    rows={2}
-                    value={form.translations.ar.description}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, description: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldDescription")} (${tCommon("langAr")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Textarea
-                    dir="rtl"
-                    rows={2}
-                    value={form.translations.ar.subDescription}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, subDescription: e.target.value },
-                        },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldSubDescription")} (${tCommon("langAr")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Input
-                    dir="rtl"
-                    value={form.tagsByLocale.ar}
-                    onChange={(e) => {
-                      setForm((s) => ({
-                        ...s,
-                        tagsByLocale: { ...s.tagsByLocale, ar: e.target.value },
-                      }));
-                    }}
-                    placeholder={`${tCommon("fieldTags")} (${tCommon("langAr")})`}
-                    className="h-8 text-sm"
-                  />
-                </div>
+                {(["en", "ar"] as const).map((loc) => {
+                  const dir = loc === "ar" ? "rtl" : "ltr";
+                  const v = form.translations[loc];
+                  return (
+                    <div
+                      key={loc}
+                      className="rounded-xl border border-border/60 bg-background p-4"
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold">
+                          {loc === "en" ? tCommon("langEn") : tCommon("langAr")}
+                        </p>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          {loc}
+                        </span>
+                      </div>
+                      <div className="grid gap-3">
+                        {(
+                          [
+                            {
+                              key: "title" as const,
+                              label: tCommon("fieldTitle"),
+                              type: "input",
+                            },
+                            {
+                              key: "subtitle" as const,
+                              label: tCommon("fieldSubtitle"),
+                              type: "input",
+                            },
+                            {
+                              key: "description" as const,
+                              label: tCommon("fieldDescription"),
+                              type: "textarea",
+                              rows: 3,
+                            },
+                            {
+                              key: "subDescription" as const,
+                              label: tCommon("fieldSubDescription"),
+                              type: "textarea",
+                              rows: 2,
+                            },
+                            {
+                              key: "tags" as const,
+                              label: tCommon("fieldTags"),
+                              type: "input",
+                            },
+                          ] as const
+                        ).map(({ key, label, type, ...rest }) => (
+                          <div key={key} className="grid gap-1.5">
+                            <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                              {label}
+                            </Label>
+                            {type === "textarea" ? (
+                              <Textarea
+                                dir={loc === "ar" ? "rtl" : "ltr"}
+                                rows={"rows" in rest ? (rest as { rows: number }).rows : 3}
+                                value={v[key]}
+                                className="resize-none text-sm"
+                                onChange={(e) =>
+                                  setForm((s) => ({
+                                    ...s,
+                                    translations: {
+                                      ...s.translations,
+                                      [loc]: {
+                                        ...s.translations[loc],
+                                        [key]: e.target.value,
+                                      },
+                                    },
+                                  }))
+                                }
+                              />
+                            ) : (
+                              <Input
+                                dir={loc === "ar" ? "rtl" : "ltr"}
+                                value={v[key]}
+                                className="h-9"
+                                onChange={(e) =>
+                                  setForm((s) => ({
+                                    ...s,
+                                    translations: {
+                                      ...s.translations,
+                                      [loc]: {
+                                        ...s.translations[loc],
+                                        [key]: e.target.value,
+                                      },
+                                    },
+                                  }))
+                                }
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-            <NewsDateTimePicker
-              value={form.dateTime}
-              onChange={(next) => setForm((s) => ({ ...s, dateTime: next }))}
-            />
-
-            {/* Active toggle */}
-            <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <Label
-                  htmlFor="news-edit-isActive"
-                  className="cursor-pointer text-sm font-medium"
-                >
-                  {tCommon("fieldIsActive")}
-                </Label>
-                <Badge
-                  variant={form.isActive ? "secondary" : "outline"}
-                  className={cn(
-                    "rounded-full px-2 py-0 text-xs font-normal",
-                    form.isActive
-                      ? "border-emerald-600/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                      : "border-muted-foreground/20 text-muted-foreground"
-                  )}
-                >
-                  {form.isActive ? tCommon("statusActive") : tCommon("statusInactive")}
-                </Badge>
-              </div>
-              <Switch
-                id="news-edit-isActive"
-                checked={form.isActive}
-                onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))}
-              />
-            </div>
-
-            {/* Image upload */}
-            <FieldGroup
-              id="news-edit-image"
-              icon={<ImageIcon className="size-3" />}
-              label={tCommon("fieldImage")}
-              hint={t("imageOptionalHint")}
-            >
-              <Input
-                id="news-edit-image"
-                type="file"
-                accept="image/*"
-                className="h-8 cursor-pointer text-xs"
-                onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-              />
-            </FieldGroup>
           </div>
-
-          <Separator />
-
-          <DialogFooter className="gap-2 pt-1 sm:gap-2">
+          <Separator className="shrink-0" />
+          <DialogFooter className="shrink-0 gap-2 pt-2">
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setEditOpen(false)}
+              variant="outline"
               disabled={submitting}
-              className="h-8 gap-1.5 px-3 text-xs"
+              onClick={() => setEditOpen(false)}
             >
-              <X className="size-3.5" />
               {tCommon("cancel")}
             </Button>
             <Button
               type="button"
-              size="sm"
-              onClick={() => void onUpdate()}
-              disabled={
-                submitting ||
-                !hasBothTranslationsRequired(form.translations, form.tagsByLocale)
-              }
-              className="h-8 gap-1.5 px-3 text-xs"
+              disabled={saveDisabled}
+              onClick={() => void onSave()}
+              className="min-w-24 gap-1.5"
             >
-              <Save className="size-3.5" />
+              {submitting ? (
+                <RefreshCw className="size-3.5 animate-spin" />
+              ) : (
+                <Pencil className="size-3.5" />
+              )}
               {t("update")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Delete */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pb-1">
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <div className="flex size-7 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10">
-                <Trash2 className="size-3.5 text-destructive" aria-hidden />
+              <div className="flex size-7 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5">
+                <Trash2 className="size-3.5 text-destructive" />
               </div>
               {t("deleteConfirmTitle")}
             </DialogTitle>
@@ -791,63 +823,38 @@ export function NewsDetailsPanel({ id }: { id: string }) {
               {t("deleteConfirmDescription")}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 pt-2 sm:gap-2">
+          <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+            <p className="text-sm font-semibold">{bestTitle}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatDate(news.date)}
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="h-8 px-3 text-xs"
+              disabled={submitting}
               onClick={() => setDeleteOpen(false)}
-              disabled={deleting}
             >
               {tCommon("cancel")}
             </Button>
             <Button
               type="button"
               variant="destructive"
-              size="sm"
-              className="h-8 gap-1.5 px-3 text-xs"
+              disabled={submitting}
               onClick={() => void onDelete()}
-              disabled={deleting}
+              className="gap-1.5"
             >
-              <Trash2 className="size-3.5" />
-              {deleting ? t("deleting") : t("deleteConfirm")}
+              {submitting ? (
+                <RefreshCw className="size-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="size-3.5" />
+              )}
+              {t("deleteConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-/* ── Small helper: labeled field group ──────────────────── */
-function FieldGroup({
-  id,
-  icon,
-  label,
-  required,
-  hint,
-  children,
-}: {
-  id: string;
-  icon: ReactNode;
-  label: string;
-  required?: boolean;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid gap-1.5">
-      <Label
-        htmlFor={id}
-        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
-      >
-        {icon}
-        {label}
-        {required && <span className="text-destructive">*</span>}
-      </Label>
-      {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

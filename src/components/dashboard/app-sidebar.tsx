@@ -3,6 +3,7 @@
 import type { HTMLAttributes } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  CalendarClock,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -43,6 +44,7 @@ type NavLabelKey =
   | "news"
   | "newsletter"
   | "horses"
+  | "events"
   | "users"
   | "roles";
 
@@ -66,6 +68,7 @@ const allNavDefs: readonly NavDef[] = [
     staffOnly: true,
   },
   { href: "/horses", labelKey: "horses", icon: ChessKnight, staffOnly: true },
+  { href: "/events", labelKey: "events", icon: CalendarClock, staffOnly: true },
   { href: "/users", labelKey: "users", icon: Users, staffOnly: true },
   { href: "/roles", labelKey: "roles", icon: Shield, staffOnly: true },
 ] as const;

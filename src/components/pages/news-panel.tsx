@@ -7,7 +7,6 @@ import { z } from "zod";
 import { toastApiError } from "@/lib/toast-api-error";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -24,14 +23,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { NewsDateTimePicker } from "@/components/news-date-time-picker";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -42,9 +33,8 @@ import {
   RefreshCw,
   Plus,
   Newspaper,
-  ArrowUpRight,
+  ChevronRight,
   Calendar,
-  Tag,
   ImageIcon,
   LayoutGrid,
   List,
@@ -52,12 +42,11 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
-  Text,
   Upload,
+  ChevronLeft,
 } from "lucide-react";
 import {
   createNews,
-  normalizeNewsItem,
   type NewsItem,
 } from "@/lib/news-api";
 import { cn } from "@/lib/utils";
@@ -67,7 +56,7 @@ import {
   type NewsLocale,
 } from "@/lib/news-api";
 
-/* ─── Types ─────────────────────────────────────────────────────── */
+/* ─── Types ──────────────────────────────────────────────────────── */
 
 type NewsFormState = {
   dateTime: Date | null;
@@ -83,11 +72,19 @@ type CreateFormErrors = Partial<
   Record<"title" | "description" | "date" | "tags" | "image", string>
 >;
 
+type ViewMode = "grid" | "list";
+
+/* ─── Helpers ────────────────────────────────────────────────────── */
+
 function emptyTranslations() {
   return {
     en: { title: "", subtitle: "", description: "", subDescription: "" },
     ar: { title: "", subtitle: "", description: "", subDescription: "" },
   };
+}
+
+function parseCommaTags(input: string): string[] {
+  return input.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 function hasBothTranslationsRequired(
@@ -98,11 +95,7 @@ function hasBothTranslationsRequired(
   return locales.every((loc) => {
     const t = tr[loc];
     const tags = parseCommaTags(tagsByLocale[loc]);
-    return (
-      t.title.trim().length > 0 &&
-      t.description.trim().length > 0 &&
-      tags.length > 0
-    );
+    return t.title.trim().length > 0 && t.description.trim().length > 0 && tags.length > 0;
   });
 }
 
@@ -112,43 +105,24 @@ const createNewsSchema = z.object({
     .instanceof(File, { message: "required" })
     .refine((f) => f.size <= 5 * 1024 * 1024, { message: "maxSize" })
     .refine(
-      (f) =>
-        ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(f.type),
+      (f) => ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(f.type),
       { message: "badType" }
     ),
 });
 
-function validateCreate(values: {
-  dateTime: Date | null;
-  imageFile: File | null;
-}): { ok: true } | { ok: false; errors: CreateFormErrors } {
+function validateCreate(values: { dateTime: Date | null; imageFile: File | null }) {
   const parsed = createNewsSchema.safeParse({
     dateTime: values.dateTime ?? undefined,
     imageFile: values.imageFile ?? undefined,
   });
-
-  if (parsed.success) return { ok: true };
-
+  if (parsed.success) return { ok: true as const };
   const next: CreateFormErrors = {};
   for (const issue of parsed.error.issues) {
     const key = issue.path[0];
     if (key === "dateTime") next.date = "required";
     if (key === "imageFile") next.image = issue.message;
   }
-  return { ok: false, errors: next };
-}
-
-type ViewMode = "grid" | "list";
-
-/* ─── Helpers ────────────────────────────────────────────────────── */
-
-// list parsing moved to `fetchNewsListPage` (pagination meta aware)
-
-function parseCommaTags(input: string): string[] {
-  return input
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return { ok: false as const, errors: next };
 }
 
 function formatNewsDate(locale: string, value: unknown): string {
@@ -162,146 +136,81 @@ function formatNewsDate(locale: string, value: unknown): string {
   }
 }
 
-/* ─── Stat Card ──────────────────────────────────────────────────── */
+/* ─── Shared stat badge ─────────────────────────────────────────── */
 
-function StatCard({
-  label,
-  value,
-  loading,
-}: {
-  label: string;
-  value: number | string;
-  loading: boolean;
-}) {
+function StatBadge({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border bg-card px-4 py-3 shadow-sm">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      {loading ? (
-        <Skeleton className="mt-1.5 h-7 w-10" />
-      ) : (
-        <p className="mt-0.5 text-2xl font-bold tabular-nums text-foreground">
-          {value}
-        </p>
-      )}
-    </div>
+    <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+      {children}
+    </span>
   );
 }
 
-/* ─── Status Badge ───────────────────────────────────────────────── */
+/* ─── Status chip ───────────────────────────────────────────────── */
 
-function StatusBadge({ isActive }: { isActive?: boolean }) {
+function StatusChip({ isActive }: { isActive?: boolean }) {
   const t = useTranslations("NewsPage");
   return isActive === false ? (
-    <Badge
-      variant="outline"
-      className={cn(
-        "gap-1 border-destructive/30 bg-destructive/10 text-destructive",
-        "dark:border-destructive/40 dark:bg-destructive/20"
-      )}
-    >
-      <XCircle className="size-3" />
-      {t("statusInactive")}
-    </Badge>
+    <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+      <XCircle className="size-3" />{t("statusInactive")}
+    </span>
   ) : (
-    <Badge
-      variant="outline"
-      className={cn(
-        "gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
-        "dark:border-emerald-400/35 dark:bg-emerald-400/15 dark:text-emerald-300"
-      )}
-    >
-      <CheckCircle2 className="size-3" />
-      {t("statusActive")}
-    </Badge>
+    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+      <CheckCircle2 className="size-3" />{t("statusActive")}
+    </span>
   );
 }
 
-/* ─── Grid Card ──────────────────────────────────────────────────── */
+/* ─── Grid card ─────────────────────────────────────────────────── */
 
-function NewsCardGrid({
-  row,
-  locale,
-  t,
-}: {
-  row: NewsItem;
-  locale: string;
-  t: ReturnType<typeof useTranslations>;
-}) {
+function NewsCardGrid({ row, locale, t }: { row: NewsItem; locale: string; t: ReturnType<typeof useTranslations> }) {
   const tr = pickBestTranslation(row, locale);
   const title = tr?.title ?? "—";
   const subtitle = tr?.subtitle ?? "";
   const tags = tr?.tags ?? [];
+
   return (
-    <Card className="group flex flex-col overflow-hidden border shadow-sm transition-shadow hover:shadow-md">
-      <div className="relative h-40 w-full overflow-hidden bg-muted">
+    <Link href={`/news/${encodeURIComponent(row.id)}`}
+      className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm transition-shadow hover:shadow-md">
+      <div className="relative h-44 overflow-hidden bg-muted">
         {row.image ? (
-          <img
-            src={row.image}
-            alt={title}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-            loading="lazy"
-          />
+          <img src={row.image} alt={title} loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <ImageIcon className="size-8 text-muted-foreground/30" />
+            <ImageIcon className="size-8 text-muted-foreground/20" />
           </div>
         )}
-        <div className="absolute left-2.5 top-2.5">
-          <StatusBadge isActive={row.isActive} />
+        <div className="absolute left-3 top-3">
+          <StatusChip isActive={row.isActive} />
         </div>
       </div>
-
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex-1">
-          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">
-            {title}
-          </p>
-          {subtitle ? (
-            <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-              {subtitle}
-            </p>
-          ) : null}
+          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{title}</p>
+          {subtitle && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {tags.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-xs font-normal">
-                {tag}
-              </Badge>
+              <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{tag}</span>
             ))}
             {tags.length > 3 && (
-              <Badge variant="outline" className="text-xs text-muted-foreground">
-                +{tags.length - 3}
-              </Badge>
+              <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">+{tags.length - 3}</span>
             )}
           </div>
         )}
-
-        <Separator />
-
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between border-t border-border/60 pt-3">
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Calendar className="size-3" />
             {formatNewsDate(locale, row.date ?? row.createdAt)}
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs"
-            nativeButton={false}
-            render={
-              <Link href={`/news/${encodeURIComponent(row.id)}`}>
-                {t("view")}
-                <ArrowUpRight className="size-3" />
-              </Link>
-            }
-          />
+          <span className="flex items-center gap-0.5 text-xs font-medium text-foreground group-hover:text-primary transition-colors">
+            {t("view")} <ChevronRight className="size-3.5" />
+          </span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Link>
   );
 }
 
@@ -338,102 +247,65 @@ export function NewsPanel() {
       setTotalPages(result.meta.pages);
     } catch (e) {
       toastApiError(e, t("loadError"));
-      setRows([]);
-      setTotal(0);
-      setTotalPages(1);
+      setRows([]); setTotal(0); setTotalPages(1);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  useEffect(() => { void load(); }, [page]);
 
   const filtered = rows.filter((r) => {
     if (!search.trim()) return true;
     const tr = pickBestTranslation(r, locale);
     const title = (tr?.title ?? "").toLowerCase();
     const subtitle = (tr?.subtitle ?? "").toLowerCase();
-    return (
-      title.includes(search.toLowerCase()) || subtitle.includes(search.toLowerCase())
-    );
+    return title.includes(search.toLowerCase()) || subtitle.includes(search.toLowerCase());
   });
 
-  const validation = validateCreate({
-    dateTime: form.dateTime,
-    imageFile,
-  });
-
-  const submitDisabled = submitting || validation.ok === false;
+  const validation = validateCreate({ dateTime: form.dateTime, imageFile });
+  const submitDisabled = submitting || !validation.ok;
 
   async function onCreate() {
     const translationsOk = hasBothTranslationsRequired(form.translations, form.tagsByLocale);
-    if (validation.ok === false || !translationsOk) {
-      const vErrors = validation.ok === false ? validation.errors : {};
+    if (!validation.ok || !translationsOk) {
+      const vErrors = !validation.ok ? validation.errors : {};
       setCreateErrors({
         ...(!translationsOk ? { title: t("translationsBothRequired") } : {}),
         ...(vErrors.date ? { date: `${t("fieldDate")} is required` } : {}),
-        ...(vErrors.image
-          ? {
-              image:
-                vErrors.image === "maxSize"
-                  ? t("imageMaxSize")
-                  : vErrors.image === "badType"
-                    ? t("imageBadType")
-                    : `${t("fieldImage")} is required`,
-            }
-          : {}),
+        ...(vErrors.image ? {
+          image: vErrors.image === "maxSize" ? t("imageMaxSize")
+            : vErrors.image === "badType" ? t("imageBadType")
+              : `${t("fieldImage")} is required`,
+        } : {}),
       });
       return;
     }
-
-    setCreateErrors((prev) =>
-      Object.keys(prev).length > 0 ? {} : prev
-    );
-
+    setCreateErrors((prev) => Object.keys(prev).length > 0 ? {} : prev);
     const fd = new FormData();
     fd.append("date", form.dateTime!.toISOString());
-    // Backend accepts boolean-like: true/false/1/0 — use 1/0 for consistency.
     fd.append("isActive", form.isActive ? "1" : "0");
     fd.append("image", imageFile!);
-    const payload: Record<string, unknown> = (["en", "ar"] as const).reduce(
-      (acc, loc) => {
-        const tt = form.translations[loc];
-        const tags = parseCommaTags(form.tagsByLocale[loc]);
-        acc[loc] = {
-          title: tt.title.trim(),
-          subtitle: tt.subtitle.trim(),
-          description: tt.description.trim(),
-          subDescription: tt.subDescription.trim(),
-          tags,
-        };
-        return acc;
-      },
-      {} as Record<string, unknown>
-    );
+    const payload = (["en", "ar"] as const).reduce((acc, loc) => {
+      const tt = form.translations[loc];
+      acc[loc] = {
+        title: tt.title.trim(), subtitle: tt.subtitle.trim(),
+        description: tt.description.trim(), subDescription: tt.subDescription.trim(),
+        tags: parseCommaTags(form.tagsByLocale[loc]),
+      };
+      return acc;
+    }, {} as Record<string, unknown>);
     fd.append("translations", JSON.stringify(payload));
-
     setSubmitting(true);
     try {
       await createNews(fd);
       toast.success(t("createSuccess"));
-      setCreateOpen(false);
-      setCreateErrors({});
-      setForm({
-        dateTime: null,
-        isActive: true,
-        translations: emptyTranslations(),
-        tagsByLocale: { en: "", ar: "" },
-      });
+      setCreateOpen(false); setCreateErrors({});
+      setForm({ dateTime: null, isActive: true, translations: emptyTranslations(), tagsByLocale: { en: "", ar: "" } });
       setImageFile(null);
       await load();
-    } catch (e) {
-      toastApiError(e, t("createError"));
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (e) { toastApiError(e, t("createError")); }
+    finally { setSubmitting(false); }
   }
 
   const activeCount = rows.filter((r) => r.isActive !== false).length;
@@ -441,609 +313,400 @@ export function NewsPanel() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-svh bg-background">
-        <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 md:px-8">
+      <div className="mx-auto w-full max-w-5xl space-y-4 px-3 py-5 sm:px-6 sm:py-8">
 
-          {/* ── Page Header ── */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border bg-card shadow-sm">
-                <Newspaper className="size-4 text-muted-foreground" />
+        {/* ── Page header ─────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-card shadow-sm">
+              <Newspaper className="size-4 text-muted-foreground" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-foreground">{t("title")}</h1>
+              <p className="text-xs text-muted-foreground">{t("description")}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <StatBadge>{loading ? "…" : total} {t("countLabel")}</StatBadge>
+            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0"
+              disabled={loading} onClick={() => void load()}>
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            </Button>
+            <Button type="button" size="sm" className="h-8 gap-1.5 text-xs"
+              onClick={() => setCreateOpen(true)}>
+              <Plus className="size-3.5" />{t("addNews")}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Stat pills ──────────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: t("countLabel"), value: loading ? "…" : total },
+            { label: t("statusActive"), value: activeCount },
+            { label: t("statusInactive"), value: inactiveCount },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-sm">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{label}</p>
+              {loading ? (
+                <Skeleton className="mt-1.5 h-6 w-8" />
+              ) : (
+                <p className="mt-0.5 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* ── List card ───────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-border/60 bg-card overflow-hidden shadow-sm">
+
+          {/* Toolbar */}
+          <div className="flex flex-col gap-3 border-b border-border/60 bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder={t("searchPlaceholder")} value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-8 text-sm bg-background" />
+            </div>
+            <div className="flex items-center gap-2">
+              {/* View toggle */}
+              <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-background p-0.5">
+                {(["list", "grid"] as ViewMode[]).map((mode) => (
+                  <Tooltip key={mode}>
+                    <TooltipTrigger
+                      render={
+                        <button type="button" onClick={() => setViewMode(mode)}
+                          className={cn(
+                            "rounded-md p-1.5 transition-all",
+                            viewMode === mode ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                          )}>
+                          {mode === "list" ? <List className="size-3.5" /> : <LayoutGrid className="size-3.5" />}
+                        </button>
+                      }
+                    />
+                    <TooltipContent>{mode === "list" ? t("viewModeList") : t("viewModeGrid")}</TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          {loading ? (
+            viewMode === "list" ? (
+              <div className="divide-y divide-border/60">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3">
+                    <Skeleton className="h-10 w-16 rounded-lg shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3.5 w-48" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-7 w-14 rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="overflow-hidden rounded-2xl border border-border/60">
+                    <Skeleton className="h-44 w-full rounded-none" />
+                    <div className="space-y-2 p-4">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : filtered.length === 0 ? (
+            <button type="button" onClick={() => !search && setCreateOpen(true)}
+              className={cn("flex w-full flex-col items-center gap-3 py-20 text-center", !search && "transition-colors hover:bg-muted/20")}>
+              <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted shadow-sm">
+                <FileText className="size-5 text-muted-foreground/50" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold tracking-tight text-foreground">
-                  {t("title")}
-                </h1>
-                <p className="text-sm text-muted-foreground">{t("description")}</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {search ? "No results found" : t("empty")}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {search ? `No articles match "${search}"` : "Create your first news article to get started."}
+                </p>
               </div>
+              {!search && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm">
+                  <Plus className="size-3" />{t("addNews")}
+                </span>
+              )}
+            </button>
+          ) : viewMode === "grid" ? (
+            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((row) => (
+                <NewsCardGrid key={row.id} row={row} locale={locale} t={t} />
+              ))}
             </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={loading}
-                onClick={() => void load()}
-              >
-                <RefreshCw
-                  className={`size-3.5 ${loading ? "animate-spin" : ""}`}
-                />
-                {t("refresh")}
-              </Button>
-
-              <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-                <Plus className="size-3.5" />
-                {t("addNews")}
-              </Button>
-            </div>
-          </div>
-
-          {/* ── Stats ── */}
-          <div className="grid grid-cols-3 gap-3">
-            <StatCard label={t("countLabel")} value={loading ? "…" : total} loading={loading} />
-            <StatCard label={t("statusActive")} value={activeCount} loading={loading} />
-            <StatCard label={t("statusInactive")} value={inactiveCount} loading={loading} />
-          </div>
-
-          {/* ── Main Card ── */}
-          <Card className="overflow-hidden border shadow-sm">
-            {/* Toolbar */}
-            <CardHeader className="border-b bg-card px-6 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="relative w-full max-w-xs">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder={t("searchPlaceholder")}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="h-8 pl-8 text-sm"
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Pagination */}
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="hidden text-xs font-normal text-muted-foreground sm:inline-flex"
-                    >
-                      {t("pageLabel")} {page} / {totalPages}
-                    </Badge>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-1"
-                      disabled={loading || page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                      {t("prev")}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-1"
-                      disabled={loading || page >= totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    >
-                      {t("next")}
-                    </Button>
-                  </div>
-
-                  {/* View mode toggle */}
-                  <div className="flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
-                    {(["list", "grid"] as ViewMode[]).map((mode) => (
-                      <Tooltip key={mode}>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              onClick={() => setViewMode(mode)}
-                              className={cn(
-                                "rounded px-2 py-1 transition-all",
-                                viewMode === mode
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground"
-                              )}
-                            >
-                              {mode === "list" ? (
-                                <List className="size-4" />
-                              ) : (
-                                <LayoutGrid className="size-4" />
-                              )}
-                            </button>
-                          }
-                        />
-                        <TooltipContent>
-                          {mode === "list" ? t("viewModeList") : t("viewModeGrid")}
-                        </TooltipContent>
-                      </Tooltip>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-0">
-              {/* ── Loading ── */}
-              {loading ? (
-                viewMode === "list" ? (
-                  <div className="divide-y">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-4 px-6 py-4">
-                        <Skeleton className="h-9 w-14 rounded-md" />
-                        <div className="flex-1 space-y-1.5">
-                          <Skeleton className="h-4 w-52" />
-                          <Skeleton className="h-3 w-36" />
-                        </div>
-                        <Skeleton className="h-5 w-16 rounded-full" />
-                        <Skeleton className="h-3 w-20" />
-                        <Skeleton className="h-7 w-14 rounded-md" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="overflow-hidden rounded-lg border">
-                        <Skeleton className="h-40 w-full rounded-none" />
-                        <div className="space-y-2 p-4">
-                          <Skeleton className="h-4 w-3/4" />
-                          <Skeleton className="h-3 w-1/2" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : filtered.length === 0 ? (
-                /* ── Empty state ── */
-                <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full border bg-muted/50">
-                    <FileText className="size-5 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {search ? "No results found" : t("empty")}
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {search
-                        ? `No articles match "${search}"`
-                        : "Create your first news article to get started."}
-                    </p>
-                  </div>
-                  {!search && (
-                    <Button
-                      size="sm"
-                      className="mt-1 gap-1.5"
-                      onClick={() => setCreateOpen(true)}
-                    >
-                      <Plus className="size-3.5" />
-                      {t("addNews")}
-                    </Button>
-                  )}
-                </div>
-              ) : viewMode === "grid" ? (
-                /* ── Grid ── */
-                <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3">
-                  {filtered.map((row) => (
-                    <NewsCardGrid key={row.id} row={row} locale={locale} t={t} />
-                  ))}
-                </div>
-              ) : (
-                /* ── Table ── */
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="pl-6 w-[38%]">{t("colTitle")}</TableHead>
-                      <TableHead>{t("colStatus")}</TableHead>
-                      <TableHead>{t("colDate")}</TableHead>
-                      <TableHead>{t("colTags")}</TableHead>
-                      <TableHead className="pr-6 w-px text-right">
-                        {t("colAction")}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((row) => (
-                      <TableRow key={row.id} className="group">
-                        {/* Title */}
-                        <TableCell className="pl-6">
-                          {(() => {
-                            const tr = pickBestTranslation(row, locale);
-                            const title = (tr?.title?.trim() ? tr.title : "—");
-                            const subtitle = tr?.subtitle ?? "";
-                            const tags = tr?.tags ?? [];
-                            return (
-                          <div className="flex items-center gap-3">
-                            <div className="h-9 w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
-                              {row.image ? (
-                                <img
-                                  src={row.image}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="flex h-full items-center justify-center">
-                                  <ImageIcon className="size-3.5 text-muted-foreground/40" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {title}
-                              </p>
-                              {subtitle ? (
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {subtitle}
-                                </p>
-                              ) : null}
-                            </div>
+          ) : (
+            /* ── Mobile cards + desktop table ── */
+            <>
+              {/* Mobile */}
+              <div className="divide-y divide-border/60 sm:hidden">
+                {filtered.map((row) => {
+                  const tr = pickBestTranslation(row, locale);
+                  const title = tr?.title?.trim() ? tr.title : "—";
+                  const subtitle = tr?.subtitle ?? "";
+                  return (
+                    <Link key={row.id} href={`/news/${encodeURIComponent(row.id)}`}
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30 active:bg-muted/50">
+                      <div className="h-12 w-16 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
+                        {row.image ? (
+                          <img src={row.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <ImageIcon className="size-3.5 text-muted-foreground/30" />
                           </div>
-                          );
-                          })()}
-                        </TableCell>
-
-                        {/* Status */}
-                        <TableCell>
-                          <StatusBadge isActive={row.isActive} />
-                        </TableCell>
-
-                        {/* Date */}
-                        <TableCell>
-                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Calendar className="size-3 shrink-0" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <StatusChip isActive={row.isActive} />
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Calendar className="size-2.5" />
                             {formatNewsDate(locale, row.date ?? row.createdAt)}
                           </span>
-                        </TableCell>
+                        </div>
+                      </div>
+                      <ChevronRight className="size-4 text-muted-foreground/40 shrink-0 rtl:rotate-180" />
+                    </Link>
+                  );
+                })}
+              </div>
 
-                        {/* Tags */}
-                        <TableCell>
-                          {(() => {
-                            const tr = pickBestTranslation(row, locale);
-                            const tags = tr?.tags ?? [];
-                            if (tags.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
-                            return (
-                              <div className="flex flex-wrap gap-1">
-                                {tags.slice(0, 3).map((tag) => (
-                                  <Badge
-                                    key={tag}
-                                    variant="secondary"
-                                    className="text-xs font-normal"
-                                  >
-                                    {tag}
-                                  </Badge>
-                                ))}
-                                {tags.length > 3 && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs text-muted-foreground"
-                                  >
-                                    +{tags.length - 3}
-                                  </Badge>
+              {/* Desktop */}
+              <div className="hidden sm:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/30">
+                      <th className="px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-[40%]">{t("colTitle")}</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colStatus")}</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colDate")}</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colTags")}</th>
+                      <th className="px-5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("colAction")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {filtered.map((row) => {
+                      const tr = pickBestTranslation(row, locale);
+                      const title = tr?.title?.trim() ? tr.title : "—";
+                      const subtitle = tr?.subtitle ?? "";
+                      const tags = tr?.tags ?? [];
+                      return (
+                        <tr key={row.id} className="group transition-colors hover:bg-muted/30">
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted">
+                                {row.image ? (
+                                  <img src={row.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center">
+                                    <ImageIcon className="size-3.5 text-muted-foreground/30" />
+                                  </div>
                                 )}
                               </div>
-                            );
-                          })()}
-                        </TableCell>
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-foreground">{title}</p>
+                                {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3"><StatusChip isActive={row.isActive} /></td>
+                          <td className="px-4 py-3">
+                            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Calendar className="size-3 shrink-0" />
+                              {formatNewsDate(locale, row.date ?? row.createdAt)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {tags.length === 0 ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {tags.slice(0, 2).map((tag) => (
+                                  <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{tag}</span>
+                                ))}
+                                {tags.length > 2 && (
+                                  <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">+{tags.length - 2}</span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <Button variant="outline" size="sm" className="h-7 gap-1.5 px-3 text-xs"
+                              nativeButton={false}
+                              render={
+                                <Link href={`/news/${encodeURIComponent(row.id)}`}>
+                                  {t("view")}<ChevronRight className="size-3.5 rtl:rotate-180" />
+                                </Link>
+                              }
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
 
-                        {/* Action */}
-                        <TableCell className="pr-6 text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-1 px-2 text-xs"
-                            nativeButton={false}
-                            render={
-                              <Link href={`/news/${encodeURIComponent(row.id)}`}>
-                                {t("view")}
-                                <ArrowUpRight className="size-3" />
-                              </Link>
-                            }
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          {/* Pagination footer */}
+          {!loading && rows.length > 0 && (
+            <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-4 py-2.5">
+              <p className="text-xs text-muted-foreground">
+                {t("pageLabel")} <span className="font-medium text-foreground">{page}</span> / <span className="font-medium text-foreground">{totalPages}</span>
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0"
+                  disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="size-3.5 rtl:rotate-180" />
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="h-7 w-7 p-0"
+                  disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="size-3.5 rtl:rotate-180" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── Create Dialog ── */}
+      {/* ══ Create dialog ══════════════════════════════════════════════ */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader className="pb-1">
+        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[600px]">
+          <DialogHeader className="shrink-0 pb-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <div className="flex size-7 items-center justify-center rounded-md border bg-muted">
-                <Newspaper className="size-3.5 text-muted-foreground" aria-hidden />
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
+                <Newspaper className="size-3.5 text-muted-foreground" />
               </div>
               {t("dialogCreateTitle")}
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              {t("dialogCreateDescription")}
-            </DialogDescription>
+            <DialogDescription className="text-xs">{t("dialogCreateDescription")}</DialogDescription>
           </DialogHeader>
 
-          <Separator />
+          <Separator className="shrink-0" />
 
-          <div className="grid max-h-[58vh] gap-3.5 overflow-y-auto py-1 pr-1">
-            {createErrors.title ? (
-              <p className="text-xs text-destructive">{createErrors.title}</p>
-            ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="grid gap-5 py-4 pr-1">
+              {createErrors.title && (
+                <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{createErrors.title}</p>
+              )}
 
-            {/* Translations + tags (required) */}
-            <div className="grid gap-2 rounded-lg border bg-muted/10 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("translationsLabel")}
-                </p>
-                <Badge variant="secondary" className="text-xs font-normal">
-                  {t("required")}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                {/* EN */}
-                <div className="grid gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">{t("langEn")}</p>
-                  <Input
-                    value={form.translations.en.title}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, title: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldTitle")} (${t("langEn")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    value={form.translations.en.subtitle}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, subtitle: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldSubtitle")} (${t("langEn")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Textarea
-                    rows={2}
-                    value={form.translations.en.description}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, description: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldDescription")} (${t("langEn")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Textarea
-                    rows={2}
-                    value={form.translations.en.subDescription}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          en: { ...s.translations.en, subDescription: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldSubDescription")} (${t("langEn")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Input
-                    value={form.tagsByLocale.en}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        tagsByLocale: { ...s.tagsByLocale, en: e.target.value },
-                      }))
-                    }
-                    placeholder={`${t("fieldTags")} (${t("langEn")})`}
-                    className="h-8 text-sm"
-                  />
+              {/* Translations */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("translationsLabel")}</p>
+                  <Badge variant="secondary" className="text-xs">{t("required")}</Badge>
                 </div>
 
-                {/* AR */}
-                <div className="grid gap-2">
-                  <p className="text-xs font-medium text-muted-foreground">{t("langAr")}</p>
-                  <Input
-                    dir="rtl"
-                    value={form.translations.ar.title}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, title: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldTitle")} (${t("langAr")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    dir="rtl"
-                    value={form.translations.ar.subtitle}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, subtitle: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldSubtitle")} (${t("langAr")})`}
-                    className="h-8 text-sm"
-                  />
-                  <Textarea
-                    dir="rtl"
-                    rows={2}
-                    value={form.translations.ar.description}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, description: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldDescription")} (${t("langAr")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Textarea
-                    dir="rtl"
-                    rows={2}
-                    value={form.translations.ar.subDescription}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        translations: {
-                          ...s.translations,
-                          ar: { ...s.translations.ar, subDescription: e.target.value },
-                        },
-                      }))
-                    }
-                    placeholder={`${t("fieldSubDescription")} (${t("langAr")})`}
-                    className="resize-none text-sm"
-                  />
-                  <Input
-                    dir="rtl"
-                    value={form.tagsByLocale.ar}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        tagsByLocale: { ...s.tagsByLocale, ar: e.target.value },
-                      }))
-                    }
-                    placeholder={`${t("fieldTags")} (${t("langAr")})`}
-                    className="h-8 text-sm"
-                  />
-                </div>
+                {(["en", "ar"] as const).map((loc) => {
+                  const dir = loc === "ar" ? "rtl" : "ltr";
+                  const v = form.translations[loc];
+                  return (
+                    <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-semibold">{loc === "en" ? t("langEn") : t("langAr")}</p>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{loc}</span>
+                      </div>
+                      <div className="grid gap-3">
+                        {[
+                          { key: "title" as const, label: t("fieldTitle"), type: "input" },
+                          { key: "subtitle" as const, label: t("fieldSubtitle"), type: "input" },
+                          { key: "description" as const, label: t("fieldDescription"), type: "textarea", rows: 2 },
+                          { key: "subDescription" as const, label: t("fieldSubDescription"), type: "textarea", rows: 2 },
+                        ].map(({ key, label, type, rows }) => (
+                          <div key={key} className="grid gap-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</Label>
+                            {type === "textarea" ? (
+                              <Textarea dir={dir} rows={rows} value={v[key]} className="resize-none text-sm"
+                                onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], [key]: e.target.value } } }))} />
+                            ) : (
+                              <Input dir={dir} value={v[key]} className="h-9"
+                                onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], [key]: e.target.value } } }))} />
+                            )}
+                          </div>
+                        ))}
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldTags")}</Label>
+                          <Input dir={dir} value={form.tagsByLocale[loc]} className="h-9"
+                            placeholder={loc === "en" ? "sport, news, event" : "رياضة، أخبار"}
+                            onChange={(e) => setForm((s) => ({ ...s, tagsByLocale: { ...s.tagsByLocale, [loc]: e.target.value } }))} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
 
-            <NewsDateTimePicker
-              value={form.dateTime}
-              required={true}
-              onChange={(next) => {
-                setForm((s) => ({ ...s, dateTime: next }));
-                setCreateErrors((e) => ({ ...e, date: undefined }));
-              }}
-              error={createErrors.date}
-            />
-
-            {/* Active toggle */}
-            <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <Label
-                  htmlFor="news-isActive"
-                  className="cursor-pointer text-sm font-medium"
-                >
-                  {t("fieldIsActive")}
-                </Label>
-                <StatusBadge isActive={form.isActive} />
-              </div>
-              <Switch
-                id="news-isActive"
-                checked={form.isActive}
-                onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))}
-              />
-            </div>
-
-            {/* Image upload */}
-            <div className="grid gap-1.5">
-              <Label className="flex items-center gap-1.5 text-sm font-medium">
-                <ImageIcon className="size-3 text-muted-foreground" aria-hidden />
-                {t("fieldImage")} <span className="text-destructive">*</span>
-              </Label>
-              <label
-                htmlFor="news-image"
-                className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed bg-muted/10 py-8 text-center transition-colors hover:bg-muted/30"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border bg-white shadow-sm">
-                  {imageFile ? (
-                    <ImageIcon className="size-4 text-foreground" />
-                  ) : (
-                    <Upload className="size-4 text-muted-foreground" />
-                  )}
-                </div>
-                {imageFile ? (
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {imageFile.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {(imageFile.size / 1024).toFixed(1)} KB · click to replace
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Click to upload
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      PNG, JPG, WEBP up to 10 MB
-                    </p>
-                  </div>
-                )}
-                <Input
-                  id="news-image"
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(e) => {
-                    setImageFile(e.target.files?.[0] ?? null);
-                    setCreateErrors((er) => ({ ...er, image: undefined }));
-                  }}
+              {/* Date picker */}
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+                <Label className="mb-3 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldDate")}</Label>
+                <NewsDateTimePicker
+                  value={form.dateTime}
+                  required
+                  onChange={(next) => { setForm((s) => ({ ...s, dateTime: next })); setCreateErrors((e) => ({ ...e, date: undefined })); }}
+                  error={createErrors.date}
                 />
-              </label>
-              {createErrors.image ? (
-                <p className="text-xs text-destructive">{createErrors.image}</p>
-              ) : null}
+              </div>
+
+              {/* Active toggle */}
+              <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
+                <div>
+                  <Label className="text-sm font-medium">{t("fieldIsActive")}</Label>
+                  <p className="text-xs text-muted-foreground">{form.isActive ? t("statusActive") : t("statusInactive")}</p>
+                </div>
+                <Switch checked={form.isActive} onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))} />
+              </div>
+
+              {/* Image upload */}
+              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("fieldImage")} <span className="text-destructive normal-case">*</span>
+                </Label>
+                <label htmlFor="news-image"
+                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30">
+                  <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted shadow-sm transition-colors group-hover:bg-background">
+                    {imageFile ? <ImageIcon className="size-5 text-foreground" /> : <Upload className="size-5 text-muted-foreground" />}
+                  </div>
+                  {imageFile ? (
+                    <div>
+                      <p className="text-sm font-medium">{imageFile.name}</p>
+                      <p className="text-xs text-muted-foreground">{(imageFile.size / 1024).toFixed(1)} KB · {t("clickToReplace")}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium">{t("clickToUpload")}</p>
+                      <p className="text-xs text-muted-foreground">PNG, JPG, WEBP up to 5 MB</p>
+                    </div>
+                  )}
+                  <Input id="news-image" type="file" accept="image/*" className="sr-only"
+                    onChange={(e) => { setImageFile(e.target.files?.[0] ?? null); setCreateErrors((er) => ({ ...er, image: undefined })); }} />
+                </label>
+                {createErrors.image && (
+                  <p className="text-xs text-destructive">{createErrors.image}</p>
+                )}
+              </div>
             </div>
           </div>
 
-          <Separator />
+          <Separator className="shrink-0" />
 
-          <DialogFooter className="gap-2 pt-1 sm:gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setCreateOpen(false)}
-              disabled={submitting}
-            >
-              {t("cancel")}
-            </Button>
-            <Button
-              onClick={() => void onCreate()}
-              disabled={submitDisabled}
-              className="gap-1.5"
-            >
-              {submitting ? (
-                <RefreshCw className="size-3.5 animate-spin" />
-              ) : (
-                <Plus className="size-3.5" />
-              )}
+          <DialogFooter className="shrink-0 gap-2 pt-2">
+            <Button variant="outline" disabled={submitting} onClick={() => setCreateOpen(false)}>{t("cancel")}</Button>
+            <Button disabled={submitDisabled} onClick={() => void onCreate()} className="gap-1.5 min-w-24">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
               {t("create")}
             </Button>
           </DialogFooter>

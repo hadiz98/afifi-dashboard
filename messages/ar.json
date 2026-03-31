@@ -50,6 +50,44 @@
     "enShort": "EN",
     "arShort": "عربي"
   },
+  "StaffDashboard": {
+    "title": "لوحة التحكم",
+    "subtitle": "نظرة عامة للموظفين: أهم المؤشرات وآخر النشاطات.",
+    "refresh": "تحديث",
+    "liveBadge": "مباشر",
+    "errorBadge": "خطأ",
+    "loadError": "تعذر تحميل ملخص لوحة التحكم",
+    "errorTitle": "لوحة التحكم غير متاحة",
+    "retry": "إعادة المحاولة",
+    "empty": "لا توجد بيانات",
+    "emptyHint": "جرّب التحديث أو تحقق من الصلاحيات.",
+    "viewAll": "عرض الكل",
+
+    "kpiNews": "الأخبار",
+    "kpiHorses": "الخيل",
+    "kpiEvents": "الفعاليات",
+    "kpiNewsletter": "النشرة البريدية",
+    "active": "نشط",
+    "inactive": "موقوف",
+    "upcoming": "قادمة",
+    "today": "اليوم",
+
+    "recentNewsTitle": "آخر الأخبار",
+    "recentNewsDescription": "أحدث المقالات المنشورة أو المحدثة.",
+    "recentNewsEmpty": "لا توجد أخبار حديثة.",
+
+    "recentHorsesTitle": "آخر الخيل",
+    "recentHorsesDescription": "أحدث التحديثات في قائمة الخيل.",
+    "recentHorsesEmpty": "لا توجد خيل حديثة.",
+
+    "upcomingEventsTitle": "الفعاليات القادمة",
+    "upcomingEventsDescription": "أقرب الفعاليات حسب اللغة الحالية.",
+    "upcomingEventsEmpty": "لا توجد فعاليات قادمة.",
+
+    "recentSubscribersTitle": "آخر المشتركين",
+    "recentSubscribersDescription": "أحدث اشتراكات النشرة البريدية.",
+    "recentSubscribersEmpty": "لا يوجد مشتركون حديثون."
+  },
   "LoginPage": {
     "title": "تسجيل الدخول",
     "description": "أدخل البريد الإلكتروني وكلمة المرور.",

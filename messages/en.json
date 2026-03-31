@@ -50,6 +50,44 @@
     "enShort": "EN",
     "arShort": "عربي"
   },
+  "StaffDashboard": {
+    "title": "Dashboard",
+    "subtitle": "Staff overview: key metrics and recent activity.",
+    "refresh": "Refresh",
+    "liveBadge": "Live",
+    "errorBadge": "Error",
+    "loadError": "Could not load dashboard summary",
+    "errorTitle": "Dashboard unavailable",
+    "retry": "Retry",
+    "empty": "No summary data",
+    "emptyHint": "Try refreshing or check your permissions.",
+    "viewAll": "View all",
+
+    "kpiNews": "News",
+    "kpiHorses": "Horses",
+    "kpiEvents": "Events",
+    "kpiNewsletter": "Newsletter",
+    "active": "Active",
+    "inactive": "Inactive",
+    "upcoming": "Upcoming",
+    "today": "Today",
+
+    "recentNewsTitle": "Recent news",
+    "recentNewsDescription": "Latest published or updated articles.",
+    "recentNewsEmpty": "No recent news items.",
+
+    "recentHorsesTitle": "Recent horses",
+    "recentHorsesDescription": "Latest updates in the horses catalog.",
+    "recentHorsesEmpty": "No recent horses.",
+
+    "upcomingEventsTitle": "Upcoming events",
+    "upcomingEventsDescription": "Next scheduled events based on your language.",
+    "upcomingEventsEmpty": "No upcoming events.",
+
+    "recentSubscribersTitle": "Recent subscribers",
+    "recentSubscribersDescription": "Latest newsletter sign-ups.",
+    "recentSubscribersEmpty": "No recent subscribers."
+  },
   "LoginPage": {
     "title": "Sign in",
     "description": "Use your account email and password.",

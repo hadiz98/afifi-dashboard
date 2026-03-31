@@ -340,7 +340,7 @@ export function EventsPanel() {
                     size="sm"
                     className="h-7 shrink-0 gap-1 px-2.5 text-xs"
                     nativeButton={false}
-                    render={<Link href={`/events/${encodeURIComponent(row.id)}`}>{t("view")}</Link>}
+                    render={<Link href={`/events/${encodeURIComponent(row.id)}`}>{t("view")}<ChevronRight className="size-3.5 rtl:rotate-180" /></Link>}
                   />
                 </div>
               );

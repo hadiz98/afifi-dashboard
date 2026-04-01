@@ -47,12 +47,15 @@ export function HomeDashboard() {
               )}
             </div>
           </div>
-          <Button asChild>
-            <Link href="/profile">
-              {t("cta")}
-              <ArrowRight className="size-4 rtl:rotate-180" />
-            </Link>
-          </Button>
+          <Button
+            nativeButton={false}
+            render={
+              <Link href="/profile">
+                {t("cta")}
+                <ArrowRight className="size-4 rtl:rotate-180" />
+              </Link>
+            }
+          />
         </CardContent>
       </Card>
 
@@ -63,9 +66,12 @@ export function HomeDashboard() {
             <CardDescription>{t("cardProfileDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/profile">{t("cardProfileAction")}</Link>
-            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/profile">{t("cardProfileAction")}</Link>}
+            />
           </CardContent>
         </Card>
 
@@ -75,12 +81,18 @@ export function HomeDashboard() {
             <CardDescription>{t("cardSecurityDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/password">{t("cardPasswordAction")}</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/sessions">{t("cardSessionsAction")}</Link>
-            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/password">{t("cardPasswordAction")}</Link>}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/sessions">{t("cardSessionsAction")}</Link>}
+            />
           </CardContent>
         </Card>
 
@@ -101,12 +113,18 @@ export function HomeDashboard() {
           <CardContent className="flex flex-wrap gap-2">
             {ready && isStaff ? (
               <>
-                <Button asChild variant="secondary" size="sm">
-                  <Link href="/users">{t("cardUsersAction")}</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/roles">{t("cardRolesAction")}</Link>
-                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href="/users">{t("cardUsersAction")}</Link>}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href="/roles">{t("cardRolesAction")}</Link>}
+                />
               </>
             ) : (
               <p className="text-sm text-muted-foreground">{t("cardStaffHint")}</p>

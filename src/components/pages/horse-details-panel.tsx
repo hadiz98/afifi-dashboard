@@ -72,6 +72,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RequiredStar } from "@/components/ui/required-star";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -271,6 +272,13 @@ function hasLocaleRequired(fields: TranslationLocaleFields): boolean {
   );
 }
 
+const translationDialogRequiredKeys = new Set<keyof TranslationLocaleFields>([
+  "name",
+  "shortBio",
+  "description",
+  "tags",
+]);
+
 function TranslationFieldsEditor({
   dir,
   value,
@@ -300,7 +308,10 @@ function TranslationFieldsEditor({
     <div className="grid gap-3">
       {rows.map(({ key, label, type, rows: taRows }) => (
         <div key={key} className="grid gap-1.5">
-          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</Label>
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {label}
+            {translationDialogRequiredKeys.has(key) ? <RequiredStar /> : null}
+          </Label>
           {type === "textarea" ? (
             <Textarea dir={dir} rows={taRows} value={value[key]} className="resize-none text-sm"
               onChange={(e) => onField(key, e.target.value)} />
@@ -1264,7 +1275,10 @@ export function HorseDetailsPanel({ id }: { id: string }) {
               <div className="grid gap-4 py-4 pr-1">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldSlug")}</Label>
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("fieldSlug")}
+                      <RequiredStar />
+                    </Label>
                     <Input
                       value={profileForm.slug}
                       onChange={(e) => setProfileForm((s) => (s ? { ...s, slug: e.target.value } : s))}
@@ -1272,7 +1286,10 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldCategory")}</Label>
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("fieldCategory")}
+                      <RequiredStar />
+                    </Label>
                     <select
                       className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={profileForm.category}
@@ -1376,7 +1393,10 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           </DialogHeader>
           <Separator />
           <div className="grid gap-3 py-2">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldCoverImage")}</Label>
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("fieldCoverImage")}
+              <RequiredStar />
+            </Label>
             <label
               htmlFor="horse-cover-only"
               className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-muted/20 py-8 text-center transition-colors hover:border-border hover:bg-muted/30"
@@ -1647,7 +1667,10 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           <Separator />
           <div className="grid gap-3 py-1">
             <div className="grid gap-1.5">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tMedia("files")}</Label>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {tMedia("files")}
+                <RequiredStar />
+              </Label>
               <input
                 ref={mediaUploadInputRef}
                 type="file"
@@ -1776,7 +1799,10 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           <Separator />
           <div className="grid gap-3 py-1">
             <div className="grid gap-1.5">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tMedia("file")}</Label>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {tMedia("file")}
+                <RequiredStar />
+              </Label>
               <Input
                 type="file"
                 accept={HORSE_GALLERY_ACCEPT}
@@ -1833,18 +1859,27 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             {awardFormError && <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{awardFormError}</p>}
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAwards("fieldYear")}</Label>
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {tAwards("fieldYear")}
+                  <RequiredStar />
+                </Label>
                 <Input inputMode="numeric" value={awardForm.year} placeholder="2026" className="h-9"
                   onChange={(e) => setAwardForm((s) => ({ ...s, year: e.target.value }))} />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAwards("fieldEventName")}</Label>
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  {tAwards("fieldEventName")}
+                  <RequiredStar />
+                </Label>
                 <Input value={awardForm.eventName} className="h-9"
                   onChange={(e) => setAwardForm((s) => ({ ...s, eventName: e.target.value }))} />
               </div>
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAwards("fieldTitle")}</Label>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {tAwards("fieldTitle")}
+                <RequiredStar />
+              </Label>
               <Input value={awardForm.title} className="h-9" onChange={(e) => setAwardForm((s) => ({ ...s, title: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">

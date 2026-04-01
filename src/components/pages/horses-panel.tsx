@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RequiredStar } from "@/components/ui/required-star";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -438,12 +439,18 @@ export function HorsesPanel() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("sectionBase")}</p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldSlug")}</Label>
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("fieldSlug")}
+                      <RequiredStar />
+                    </Label>
                     <Input value={form.slug} className="h-9" placeholder={t("placeholderSlug")}
                       onChange={(e) => setForm((s) => ({ ...s, slug: e.target.value }))} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldCategory")}</Label>
+                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("fieldCategory")}
+                      <RequiredStar />
+                    </Label>
                     <select
                       className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={form.category}

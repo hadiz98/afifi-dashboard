@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RequiredStar } from "@/components/ui/required-star";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -623,13 +624,16 @@ export function NewsPanel() {
                       </div>
                       <div className="grid gap-3">
                         {[
-                          { key: "title" as const, label: t("fieldTitle"), type: "input" },
-                          { key: "subtitle" as const, label: t("fieldSubtitle"), type: "input" },
-                          { key: "description" as const, label: t("fieldDescription"), type: "textarea", rows: 2 },
-                          { key: "subDescription" as const, label: t("fieldSubDescription"), type: "textarea", rows: 2 },
-                        ].map(({ key, label, type, rows }) => (
+                          { key: "title" as const, label: t("fieldTitle"), type: "input" as const, required: true },
+                          { key: "subtitle" as const, label: t("fieldSubtitle"), type: "input" as const },
+                          { key: "description" as const, label: t("fieldDescription"), type: "textarea" as const, rows: 2, required: true },
+                          { key: "subDescription" as const, label: t("fieldSubDescription"), type: "textarea" as const, rows: 2 },
+                        ].map(({ key, label, type, rows, required }) => (
                           <div key={key} className="grid gap-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</Label>
+                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                              {label}
+                              {required ? <RequiredStar /> : null}
+                            </Label>
                             {type === "textarea" ? (
                               <Textarea dir={dir} rows={rows} value={v[key]} className="resize-none text-sm"
                                 onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], [key]: e.target.value } } }))} />
@@ -640,7 +644,10 @@ export function NewsPanel() {
                           </div>
                         ))}
                         <div className="grid gap-1.5">
-                          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldTags")}</Label>
+                          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            {t("fieldTags")}
+                            <RequiredStar />
+                          </Label>
                           <Input dir={dir} value={form.tagsByLocale[loc]} className="h-9"
                             placeholder={loc === "en" ? "sport, news, event" : "رياضة، أخبار"}
                             onChange={(e) => setForm((s) => ({ ...s, tagsByLocale: { ...s.tagsByLocale, [loc]: e.target.value } }))} />
@@ -653,7 +660,10 @@ export function NewsPanel() {
 
               {/* Date picker */}
               <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
-                <Label className="mb-3 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldDate")}</Label>
+                <Label className="mb-3 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {t("fieldDate")}
+                  <RequiredStar />
+                </Label>
                 <NewsDateTimePicker
                   value={form.dateTime}
                   required

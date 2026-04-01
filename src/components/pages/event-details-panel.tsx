@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RequiredStar } from "@/components/ui/required-star";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -624,6 +625,7 @@ export function EventDetailsPanel({ id }: { id: string }) {
                   <div className="grid gap-1.5">
                     <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                       {t("fieldSlug")}
+                      <RequiredStar />
                     </Label>
                     <Input
                       value={form.slug}
@@ -647,7 +649,8 @@ export function EventDetailsPanel({ id }: { id: string }) {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
                     <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      {t("startsAtLabel")} *
+                      {t("startsAtLabel")}
+                      <RequiredStar />
                     </Label>
                     <NewsDateTimePicker
                       value={form.startsAt}
@@ -737,6 +740,7 @@ export function EventDetailsPanel({ id }: { id: string }) {
                           <div key={key} className="grid gap-1.5">
                             <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                               {label}
+                              <RequiredStar />
                             </Label>
                             {type === "textarea" ? (
                               <Textarea

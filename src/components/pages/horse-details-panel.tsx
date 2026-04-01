@@ -6,7 +6,6 @@ import {
   Pencil,
   Trash2,
   RefreshCw,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
   Images,
@@ -17,22 +16,18 @@ import {
   Image as ImageIcon,
   Upload,
   Award,
-  FileText,
-  Tag,
-  Text,
   Globe,
   Calendar,
   Ruler,
   Palette,
   User,
-  Building2,
-  StickyNote,
   CheckCircle2,
   XCircle,
-  MoreHorizontal,
   Eye,
+  X,
+  Network,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -61,17 +56,12 @@ import {
   type HorseLocale,
   type HorseMedia,
   type HorseAward,
+  type HorsePedigree,
+  type HorsePedigreeRelative,
 } from "@/lib/horses-api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -107,12 +97,19 @@ type TranslationsForm = Record<
   {
     name: string; subtitle: string; shortBio: string; description: string;
     tags: string; metaTitle: string; metaDescription: string;
+    color: string; breeder: string;
     sireName: string; damName: string; bloodline: string;
   }
 >;
 
+type PedigreeRelKey = "father" | "mother" | "grandfather" | "grandmother";
+
 function emptyTranslations(): TranslationsForm {
-  const empty = { name: "", subtitle: "", shortBio: "", description: "", tags: "", metaTitle: "", metaDescription: "", sireName: "", damName: "", bloodline: "" };
+  const empty = {
+    name: "", subtitle: "", shortBio: "", description: "", tags: "",
+    metaTitle: "", metaDescription: "", color: "", breeder: "",
+    sireName: "", damName: "", bloodline: "",
+  };
   return { en: { ...empty }, ar: { ...empty } };
 }
 
@@ -125,25 +122,213 @@ function translationsFromItem(item: HorseDetails): TranslationsForm {
       shortBio: tr.shortBio ?? "", description: (tr.description ?? "") || "",
       tags: (tr.tags ?? []).join(", "), metaTitle: (tr.metaTitle ?? "") || "",
       metaDescription: (tr.metaDescription ?? "") || "",
+      color: (tr.color ?? "") || "",
+      breeder: (tr.breeder ?? "") || "",
       sireName: (tr.sireName ?? "") || "", damName: (tr.damName ?? "") || "",
       bloodline: (tr.bloodline ?? "") || "",
     };
   }
+  const rootColor = item.color?.trim() ?? "";
+  const rootBreeder = item.breeder?.trim() ?? "";
+  for (const loc of ["en", "ar"] as const) {
+    if (!base[loc].color.trim() && rootColor) {
+      base[loc] = { ...base[loc], color: rootColor };
+    }
+    if (!base[loc].breeder.trim() && rootBreeder) {
+      base[loc] = { ...base[loc], breeder: rootBreeder };
+    }
+  }
   return base;
 }
 
-function hasBothLocalesRequired(tr: TranslationsForm): boolean {
-  return (["en", "ar"] as const).every((loc) => {
-    const t = tr[loc];
-    return t.name.trim().length > 0 && t.shortBio.trim().length > 0 &&
-      t.description.trim().length > 0 && parseCommaTags(t.tags).length > 0;
-  });
+function clonePedigree(p: HorsePedigree | null | undefined): HorsePedigree {
+  if (!p) return {};
+  const copy: HorsePedigree = {};
+  for (const k of ["father", "mother", "grandfather", "grandmother"] as const) {
+    const r = p[k];
+    if (r) copy[k] = { name: r.name, birthDate: r.birthDate, color: r.color };
+  }
+  return copy;
+}
+
+function pedigreeHasContent(p: HorsePedigree | null | undefined): boolean {
+  if (!p) return false;
+  for (const k of ["father", "mother", "grandfather", "grandmother"] as const) {
+    const r = p[k];
+    if (r && (String(r.name ?? "").trim() || String(r.birthDate ?? "").trim() || String(r.color ?? "").trim())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function serializePedigreeForPatch(draft: HorsePedigree, previous: HorsePedigree | null | undefined): string | undefined {
+  if (!pedigreeHasContent(draft)) {
+    if (pedigreeHasContent(previous)) return "{}";
+    return undefined;
+  }
+  const out: HorsePedigree = {};
+  for (const k of ["father", "mother", "grandfather", "grandmother"] as const) {
+    const r = draft[k];
+    if (r && (String(r.name ?? "").trim() || String(r.birthDate ?? "").trim() || String(r.color ?? "").trim())) {
+      out[k] = {
+        name: String(r.name ?? "").trim() || null,
+        birthDate: String(r.birthDate ?? "").trim() || null,
+        color: String(r.color ?? "").trim() || null,
+      };
+    }
+  }
+  return JSON.stringify(out);
+}
+
+/** Normalize stored pedigree birthDate for `<input type="date">` (YYYY-MM-DD). */
+function pedigreeBirthDateForDateInput(raw: string | null | undefined): string {
+  if (raw == null || !String(raw).trim()) return "";
+  const s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return "";
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+function PedigreeReadonlyCards({
+  pedigree,
+  labels,
+}: {
+  pedigree: HorsePedigree | null | undefined;
+  labels: { father: string; mother: string; grandfather: string; grandmother: string; birthDate: string; color: string };
+}) {
+  if (!pedigree || !pedigreeHasContent(pedigree)) return null;
+  const rows: { key: PedigreeRelKey; title: string; rel: HorsePedigreeRelative | null | undefined }[] = [
+    { key: "father", title: labels.father, rel: pedigree.father },
+    { key: "mother", title: labels.mother, rel: pedigree.mother },
+    { key: "grandfather", title: labels.grandfather, rel: pedigree.grandfather },
+    { key: "grandmother", title: labels.grandmother, rel: pedigree.grandmother },
+  ];
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {rows.map(({ key, title: ttl, rel }) => {
+        if (!rel || (!String(rel.name ?? "").trim() && !String(rel.birthDate ?? "").trim() && !String(rel.color ?? "").trim())) {
+          return null;
+        }
+        return (
+          <div key={key} className="rounded-xl border border-border/60 bg-background px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{ttl}</p>
+            {rel.name ? <p className="mt-1 text-sm font-medium text-foreground">{rel.name}</p> : null}
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              {rel.birthDate ? <span>{labels.birthDate}: {rel.birthDate}</span> : null}
+              {rel.color ? <span>{labels.color}: {rel.color}</span> : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+type ProfileFormState = {
+  slug: string;
+  category: HorseCategory;
+  isActive: boolean;
+  birthDate: string;
+  heightCm: string;
+  owner: string;
+  notes: string;
+};
+
+function profileFormFromItem(item: HorseDetails): ProfileFormState {
+  return {
+    slug: item.slug,
+    category: item.category,
+    isActive: item.isActive !== false,
+    birthDate: item.birthDate ?? "",
+    heightCm: typeof item.heightCm === "number" ? String(item.heightCm) : "",
+    owner: item.owner ?? "",
+    notes: item.notes ?? "",
+  };
+}
+
+type TranslationLocaleFields = TranslationsForm[HorseLocale];
+
+function buildLocaleTranslationPayload(tt: TranslationLocaleFields): Record<string, unknown> {
+  return {
+    name: tt.name.trim(), subtitle: tt.subtitle.trim(), description: tt.description.trim(),
+    shortBio: tt.shortBio.trim(), tags: parseCommaTags(tt.tags), metaTitle: tt.metaTitle.trim(),
+    metaDescription: tt.metaDescription.trim(),
+    color: tt.color.trim(), breeder: tt.breeder.trim(),
+    sireName: tt.sireName.trim(), damName: tt.damName.trim(), bloodline: tt.bloodline.trim(),
+  };
+}
+
+/** Required fields for one locale when saving that locale's translation dialog. */
+function hasLocaleRequired(fields: TranslationLocaleFields): boolean {
+  return (
+    fields.name.trim().length > 0 &&
+    fields.shortBio.trim().length > 0 &&
+    fields.description.trim().length > 0 &&
+    parseCommaTags(fields.tags).length > 0
+  );
+}
+
+function TranslationFieldsEditor({
+  dir,
+  value,
+  onField,
+  t,
+}: {
+  dir: "ltr" | "rtl";
+  value: TranslationLocaleFields;
+  onField: (key: keyof TranslationLocaleFields, v: string) => void;
+  t: (key: string) => string;
+}) {
+  const rows: Array<{ key: keyof TranslationLocaleFields; label: string; type: "input" | "textarea"; rows?: number }> = [
+    { key: "name", label: t("fieldName"), type: "input" },
+    { key: "subtitle", label: t("fieldSubtitle"), type: "input" },
+    { key: "shortBio", label: t("fieldShortBio"), type: "textarea", rows: 2 },
+    { key: "description", label: t("fieldDescription"), type: "textarea", rows: 4 },
+    { key: "tags", label: t("fieldTags"), type: "input" },
+    { key: "color", label: t("fieldColor"), type: "input" },
+    { key: "breeder", label: t("fieldBreeder"), type: "input" },
+    { key: "metaTitle", label: t("fieldMetaTitle"), type: "input" },
+    { key: "metaDescription", label: t("fieldMetaDescription"), type: "textarea", rows: 2 },
+    { key: "sireName", label: t("fieldSireName"), type: "input" },
+    { key: "damName", label: t("fieldDamName"), type: "input" },
+    { key: "bloodline", label: t("fieldBloodline"), type: "textarea", rows: 2 },
+  ];
+  return (
+    <div className="grid gap-3">
+      {rows.map(({ key, label, type, rows: taRows }) => (
+        <div key={key} className="grid gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</Label>
+          {type === "textarea" ? (
+            <Textarea dir={dir} rows={taRows} value={value[key]} className="resize-none text-sm"
+              onChange={(e) => onField(key, e.target.value)} />
+          ) : (
+            <Input dir={dir} value={value[key]} className="h-9" onChange={(e) => onField(key, e.target.value)} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const updateSchema = z.object({
   slug: z.string().trim().min(1),
   category: z.enum(categories),
   isActive: z.boolean(),
+});
+
+const profileFormSchema = updateSchema.extend({
+  birthDate: z.string(),
+  heightCm: z.string().refine((s) => {
+    const x = s.trim();
+    if (!x) return true;
+    const n = Number(x);
+    return Number.isFinite(n) && n >= 0;
+  }),
+  owner: z.string(),
+  notes: z.string(),
 });
 
 const awardSchema = z.object({
@@ -209,6 +394,17 @@ function StatBadge({ children }: { children: React.ReactNode }) {
   );
 }
 
+const HORSE_GALLERY_MAX_FILES_PER_REQUEST = 10;
+const HORSE_GALLERY_MAX_FILE_BYTES = 10 * 1024 * 1024;
+const HORSE_GALLERY_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+
+function isAllowedHorseGalleryFile(file: File): boolean {
+  const mime = file.type.toLowerCase();
+  if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(mime)) return true;
+  const name = file.name.toLowerCase();
+  return /\.(jpe?g|png|webp|gif)$/i.test(name);
+}
+
 export function HorseDetailsPanel({ id }: { id: string }) {
   const t = useTranslations("HorseDetailsPage");
   const tList = useTranslations("HorsesPage");
@@ -227,9 +423,12 @@ export function HorseDetailsPanel({ id }: { id: string }) {
   const [viewerIndex, setViewerIndex] = useState(0);
 
   const [mediaUploadOpen, setMediaUploadOpen] = useState(false);
-  const [mediaUploadFile, setMediaUploadFile] = useState<File | null>(null);
+  const [mediaUploadFiles, setMediaUploadFiles] = useState<File[]>([]);
   const [mediaUploadCaption, setMediaUploadCaption] = useState("");
   const [mediaUploadSortOrder, setMediaUploadSortOrder] = useState("");
+  const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
+  const [mediaUploadDropOver, setMediaUploadDropOver] = useState(false);
+  const mediaUploadInputRef = useRef<HTMLInputElement>(null);
 
   const [mediaEditOpen, setMediaEditOpen] = useState(false);
   const [mediaEditId, setMediaEditId] = useState<string | null>(null);
@@ -252,34 +451,28 @@ export function HorseDetailsPanel({ id }: { id: string }) {
   const [awardFormError, setAwardFormError] = useState<string | null>(null);
   const [awardForm, setAwardForm] = useState({ year: "", eventName: "", title: "", placing: "", location: "", notes: "" });
 
-  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
 
-  const [form, setForm] = useState<{
-    slug: string; category: HorseCategory; isActive: boolean;
-    birthDate: string; color: string; heightCm: string;
-    breeder: string; owner: string; notes: string; translations: TranslationsForm;
-  }>({
-    slug: "", category: "stallion", isActive: true, birthDate: "",
-    color: "", heightCm: "", breeder: "", owner: "", notes: "", translations: emptyTranslations(),
-  });
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState<ProfileFormState | null>(null);
+
+  const [coverEditOpen, setCoverEditOpen] = useState(false);
+  const [coverEditFile, setCoverEditFile] = useState<File | null>(null);
+
+  const [pedigreeEditOpen, setPedigreeEditOpen] = useState(false);
+  const [pedigreeEdit, setPedigreeEdit] = useState<HorsePedigree>({});
+
+  const [translationEnOpen, setTranslationEnOpen] = useState(false);
+  const [translationEnForm, setTranslationEnForm] = useState<TranslationLocaleFields | null>(null);
+  const [translationArOpen, setTranslationArOpen] = useState(false);
+  const [translationArForm, setTranslationArForm] = useState<TranslationLocaleFields | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const next = await fetchHorseById(id);
       setItem(next);
-      setCoverFile(null);
-      setForm({
-        slug: next.slug, category: next.category, isActive: next.isActive !== false,
-        birthDate: next.birthDate ?? "", color: next.color ?? "",
-        heightCm: typeof next.heightCm === "number" ? String(next.heightCm) : "",
-        breeder: next.breeder ?? "", owner: next.owner ?? "",
-        notes: next.notes ?? "", translations: translationsFromItem(next),
-      });
     } catch (e) {
       toastApiError(e, t("loadError"));
       setItem(null);
@@ -287,6 +480,76 @@ export function HorseDetailsPanel({ id }: { id: string }) {
       setLoading(false);
     }
   }, [id, t]);
+
+  const persistHorseUpdate = useCallback(
+    async (patch: {
+      base?: Partial<ProfileFormState>;
+      /** Only from translation dialogs: one locale, dialog field values only. */
+      translationPatch?: { locale: HorseLocale; fields: TranslationLocaleFields };
+      pedigree?: HorsePedigree;
+      coverFile?: File | null;
+    }): Promise<boolean> => {
+      const current = item;
+      if (!current) return false;
+      setSubmitting(true);
+      try {
+        let profileBase: ProfileFormState | null = null;
+        if (patch.base !== undefined) {
+          profileBase = {
+            slug: patch.base.slug ?? current.slug,
+            category: patch.base.category ?? current.category,
+            isActive: patch.base.isActive ?? (current.isActive !== false),
+            birthDate: patch.base.birthDate ?? (current.birthDate ?? ""),
+            heightCm: patch.base.heightCm ?? (typeof current.heightCm === "number" ? String(current.heightCm) : ""),
+            owner: patch.base.owner ?? (current.owner ?? ""),
+            notes: patch.base.notes ?? (current.notes ?? ""),
+          };
+          if (!profileFormSchema.safeParse(profileBase).success) {
+            toast.error(t("invalidProfile"));
+            return false;
+          }
+        }
+        if (patch.translationPatch) {
+          if (!hasLocaleRequired(patch.translationPatch.fields)) {
+            toast.error(t("invalidTranslation"));
+            return false;
+          }
+        }
+        const fd = new FormData();
+        if (profileBase) {
+          fd.append("slug", profileBase.slug.trim());
+          fd.append("category", profileBase.category);
+          fd.append("isActive", profileBase.isActive ? "1" : "0");
+          if (profileBase.birthDate.trim()) fd.append("birthDate", profileBase.birthDate.trim());
+          if (profileBase.heightCm.trim()) fd.append("heightCm", profileBase.heightCm.trim());
+          if (profileBase.owner.trim()) fd.append("owner", profileBase.owner.trim());
+          if (profileBase.notes.trim()) fd.append("notes", profileBase.notes.trim());
+        }
+        if (patch.translationPatch) {
+          const { locale, fields } = patch.translationPatch;
+          fd.append(
+            "translations",
+            JSON.stringify({ [locale]: buildLocaleTranslationPayload(fields) })
+          );
+        }
+        if (patch.pedigree !== undefined) {
+          const pedStr = serializePedigreeForPatch(patch.pedigree, current.pedigree ?? null);
+          if (pedStr !== undefined) fd.append("pedigree", pedStr);
+        }
+        if (patch.coverFile) fd.append("coverImage", patch.coverFile);
+        await updateHorse(id, fd);
+        toast.success(t("saveSuccess"));
+        await load();
+        return true;
+      } catch (e) {
+        toastApiError(e, t("saveError"));
+        return false;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [item, id, load, t]
+  );
 
   const loadMedia = useCallback(async () => {
     setMediaLoading(true);
@@ -329,18 +592,66 @@ export function HorseDetailsPanel({ id }: { id: string }) {
     } catch (e) { toastApiError(e, tMedia("reorderError")); }
   }
 
+  function addFilesToGallerySelection(prev: File[], incoming: File[]): { next: File[]; error: string | null } {
+    if (!incoming.length) return { next: prev, error: null };
+    if (prev.length + incoming.length > HORSE_GALLERY_MAX_FILES_PER_REQUEST) {
+      return { next: prev, error: tMedia("tooManyFiles") };
+    }
+    for (const f of incoming) {
+      if (f.size > HORSE_GALLERY_MAX_FILE_BYTES) return { next: prev, error: tMedia("fileTooLarge") };
+      if (!isAllowedHorseGalleryFile(f)) return { next: prev, error: tMedia("invalidFileType") };
+    }
+    return { next: [...prev, ...incoming], error: null };
+  }
+
+  function onMediaUploadDialogOpenChange(open: boolean) {
+    setMediaUploadOpen(open);
+    if (!open) {
+      setMediaUploadFiles([]);
+      setMediaUploadCaption("");
+      setMediaUploadSortOrder("");
+      setMediaUploadError(null);
+      setMediaUploadDropOver(false);
+    }
+  }
+
+  function onMediaUploadPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = "";
+    if (!list.length) return;
+    setMediaUploadFiles((prev) => {
+      const { next, error } = addFilesToGallerySelection(prev, list);
+      setMediaUploadError(error);
+      return error ? prev : next;
+    });
+  }
+
+  function onMediaUploadDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setMediaUploadDropOver(false);
+    const list = Array.from(e.dataTransfer.files ?? []);
+    if (!list.length) return;
+    setMediaUploadFiles((prev) => {
+      const { next, error } = addFilesToGallerySelection(prev, list);
+      setMediaUploadError(error);
+      return error ? prev : next;
+    });
+  }
+
   async function onUploadMedia() {
-    if (!mediaUploadFile) { toast.error(tMedia("fileRequired")); return; }
+    if (!mediaUploadFiles.length) { toast.error(tMedia("fileRequired")); return; }
     setSubmitting(true);
     try {
-      await addHorseMedia(id, {
-        file: mediaUploadFile,
+      const created = await addHorseMedia(id, {
+        files: mediaUploadFiles,
         caption: mediaUploadCaption.trim() || undefined,
         sortOrder: mediaUploadSortOrder.trim() ? Number(mediaUploadSortOrder) : undefined,
       });
-      toast.success(tMedia("uploadSuccess"));
-      setMediaUploadOpen(false);
-      setMediaUploadFile(null); setMediaUploadCaption(""); setMediaUploadSortOrder("");
+      toast.success(
+        created.length === 1 ? tMedia("uploadSuccess") : tMedia("uploadSuccessMany", { count: created.length })
+      );
+      onMediaUploadDialogOpenChange(false);
       await loadMedia();
     } catch (e) { toastApiError(e, tMedia("uploadError")); }
     finally { setSubmitting(false); }
@@ -348,6 +659,14 @@ export function HorseDetailsPanel({ id }: { id: string }) {
 
   async function onReplaceMediaFile() {
     if (!mediaReplaceId || !mediaReplaceFile) { toast.error(tMedia("fileRequired")); return; }
+    if (mediaReplaceFile.size > HORSE_GALLERY_MAX_FILE_BYTES) {
+      toast.error(tMedia("fileTooLarge"));
+      return;
+    }
+    if (!isAllowedHorseGalleryFile(mediaReplaceFile)) {
+      toast.error(tMedia("invalidFileType"));
+      return;
+    }
     setSubmitting(true);
     try {
       await replaceHorseMediaFile(id, mediaReplaceId, mediaReplaceFile);
@@ -427,45 +746,60 @@ export function HorseDetailsPanel({ id }: { id: string }) {
     finally { setSubmitting(false); }
   }
 
-  const saveDisabled = useMemo(() => {
-    const ok = updateSchema.safeParse({ slug: form.slug, category: form.category, isActive: form.isActive }).success;
-    return submitting || !ok || !hasBothLocalesRequired(form.translations);
-  }, [form, submitting]);
+  function setPedigreeRel(key: PedigreeRelKey, field: "name" | "birthDate" | "color", value: string) {
+    setPedigreeEdit((p) => ({
+      ...p,
+      [key]: { ...(p[key] ?? {}), [field]: value || null },
+    }));
+  }
 
-  async function onSave() {
-    setFormError(null);
-    const ok = updateSchema.safeParse({ slug: form.slug, category: form.category, isActive: form.isActive });
-    if (!ok.success || !hasBothLocalesRequired(form.translations)) { setFormError(t("invalid")); return; }
-    setSubmitting(true);
-    try {
-      const fd = new FormData();
-      fd.append("slug", form.slug.trim()); fd.append("category", form.category);
-      fd.append("isActive", form.isActive ? "1" : "0");
-      if (form.birthDate.trim()) fd.append("birthDate", form.birthDate.trim());
-      if (form.color.trim()) fd.append("color", form.color.trim());
-      if (form.heightCm.trim()) fd.append("heightCm", form.heightCm.trim());
-      if (form.breeder.trim()) fd.append("breeder", form.breeder.trim());
-      if (form.owner.trim()) fd.append("owner", form.owner.trim());
-      if (form.notes.trim()) fd.append("notes", form.notes.trim());
-      const translationsPayload = (["en", "ar"] as const).reduce((acc, loc) => {
-        const tt = form.translations[loc];
-        acc[loc] = {
-          name: tt.name.trim(), subtitle: tt.subtitle.trim(), description: tt.description.trim(),
-          shortBio: tt.shortBio.trim(), tags: parseCommaTags(tt.tags), metaTitle: tt.metaTitle.trim(),
-          metaDescription: tt.metaDescription.trim(), sireName: tt.sireName.trim(),
-          damName: tt.damName.trim(), bloodline: tt.bloodline.trim(),
-        };
-        return acc;
-      }, {} as Record<string, unknown>);
-      fd.append("translations", JSON.stringify(translationsPayload));
-      if (coverFile) fd.append("coverImage", coverFile);
-      const updated = await updateHorse(id, fd);
-      setItem(updated);
-      toast.success(t("saveSuccess"));
-      setEditOpen(false); setCoverFile(null);
-      await load();
-    } catch (e) { toastApiError(e, t("saveError")); }
-    finally { setSubmitting(false); }
+  const profileSaveDisabled = useMemo(() => {
+    if (!profileForm) return true;
+    return submitting || !profileFormSchema.safeParse(profileForm).success;
+  }, [profileForm, submitting]);
+
+  const translationEnSaveDisabled =
+    submitting || !translationEnForm || !hasLocaleRequired(translationEnForm);
+  const translationArSaveDisabled =
+    submitting || !translationArForm || !hasLocaleRequired(translationArForm);
+
+  async function onSaveProfile() {
+    if (!profileForm) return;
+    const ok = await persistHorseUpdate({ base: profileForm });
+    if (ok) setProfileEditOpen(false);
+  }
+
+  async function onSaveCover() {
+    if (!coverEditFile) {
+      toast.error(t("coverRequired"));
+      return;
+    }
+    const ok = await persistHorseUpdate({ coverFile: coverEditFile });
+    if (ok) {
+      setCoverEditOpen(false);
+      setCoverEditFile(null);
+    }
+  }
+
+  async function onSavePedigree() {
+    const ok = await persistHorseUpdate({ pedigree: pedigreeEdit });
+    if (ok) setPedigreeEditOpen(false);
+  }
+
+  async function onSaveTranslationEn() {
+    if (!translationEnForm) return;
+    const ok = await persistHorseUpdate({
+      translationPatch: { locale: "en", fields: translationEnForm },
+    });
+    if (ok) setTranslationEnOpen(false);
+  }
+
+  async function onSaveTranslationAr() {
+    if (!translationArForm) return;
+    const ok = await persistHorseUpdate({
+      translationPatch: { locale: "ar", fields: translationArForm },
+    });
+    if (ok) setTranslationArOpen(false);
   }
 
   async function onDelete() {
@@ -482,6 +816,15 @@ export function HorseDetailsPanel({ id }: { id: string }) {
   const subtitle = item ? pickBestName(item, locale).subtitle : "";
   const cover = item?.coverImage?.trim() ? normalizeHorseCoverImagePath(item.coverImage) : null;
 
+  const displayColor = useMemo(() => {
+    if (!item) return null;
+    const want = locale === "ar" ? "ar" : "en";
+    const tr = item.translations.find((x) => x.locale === want);
+    const c = tr?.color?.trim();
+    if (c) return c;
+    return item.color?.trim() ?? null;
+  }, [item, locale]);
+
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4 px-3 py-5 sm:px-6 sm:py-8">
 
@@ -495,13 +838,6 @@ export function HorseDetailsPanel({ id }: { id: string }) {
         />
         <div className="flex items-center gap-2">
           <Button
-            type="button" variant="outline" size="sm"
-            className="gap-1.5" disabled={loading || !item}
-            onClick={() => setEditOpen(true)}
-          >
-            <Pencil className="size-3.5" /><span className="hidden sm:inline">{t("edit")}</span>
-          </Button>
-          <Button
             type="button" variant="destructive" size="sm"
             className="gap-1.5" disabled={loading || !item}
             onClick={() => setDeleteOpen(true)}
@@ -513,16 +849,23 @@ export function HorseDetailsPanel({ id }: { id: string }) {
 
       {/* ── Hero card ────────────────────────────────────────────────────────── */}
       {loading ? (
-        <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
-          <Skeleton className="h-48 w-full sm:h-56" />
-          <div className="p-4 space-y-3">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-32" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
+        <>
+          <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
+            <Skeleton className="aspect-[21/9] max-h-56 w-full sm:aspect-auto sm:h-52" />
+            <div className="h-3 border-b border-border/60 bg-muted/30" />
+            <div className="p-4"><Skeleton className="h-8 w-32" /></div>
+          </div>
+          <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
+            <div className="h-3 border-b border-border/60 bg-muted/30" />
+            <div className="p-4 space-y-3">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-4 w-32" />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       ) : !item ? (
         <div className="rounded-2xl border border-dashed border-border bg-muted/20 py-20 text-center">
           <ChessKnight className="mx-auto size-10 text-muted-foreground/30" />
@@ -531,10 +874,20 @@ export function HorseDetailsPanel({ id }: { id: string }) {
         </div>
       ) : (
         <>
-          {/* Hero */}
-          <div className="rounded-2xl border border-border/60 bg-card overflow-hidden shadow-sm">
-            {/* Cover image */}
-            <div className="relative h-44 bg-muted sm:h-56">
+          <Section
+            icon={ImageIcon}
+            title={t("cardCover")}
+            actions={
+              <Button
+                type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
+                disabled={submitting}
+                onClick={() => { setCoverEditFile(null); setCoverEditOpen(true); }}
+              >
+                <Pencil className="size-3" /><span className="hidden sm:inline">{t("edit")}</span>
+              </Button>
+            }
+          >
+            <div className="relative aspect-[21/9] max-h-56 overflow-hidden rounded-xl border border-border/60 bg-muted sm:aspect-auto sm:h-52">
               {cover ? (
                 <img src={cover} alt={title} className="h-full w-full object-cover" loading="lazy" decoding="async"
                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
@@ -543,54 +896,68 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                   <ImageIcon className="size-10 text-muted-foreground/20" />
                 </div>
               )}
-              {/* Status overlay */}
-              <div className="absolute right-3 top-3">
-                {item.isActive !== false ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
-                    <CheckCircle2 className="size-3" />{tList("active")}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/90 px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
-                    <XCircle className="size-3" />{tList("inactive")}
-                  </span>
-                )}
-              </div>
             </div>
+          </Section>
 
-            {/* Identity */}
-            <div className="border-b border-border/60 px-4 py-4 sm:px-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h1 className="truncate text-lg font-bold tracking-tight text-foreground sm:text-xl">{title}</h1>
-                  {subtitle && <p className="mt-0.5 truncate text-sm text-muted-foreground">{subtitle}</p>}
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Badge variant="secondary" className="rounded-full font-normal">
-                      {categoryLabel(tList, item.category)}
-                    </Badge>
-                    <StatBadge>{item.slug}</StatBadge>
-                  </div>
+          <Section
+            icon={ChessKnight}
+            title={t("cardProfile")}
+            badge={
+              item.isActive !== false ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+                  <CheckCircle2 className="size-3" />{tList("active")}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <XCircle className="size-3" />{tList("inactive")}
+                </span>
+              )
+            }
+            actions={
+              <Button
+                type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
+                disabled={submitting}
+                onClick={() => { if (item) setProfileForm(profileFormFromItem(item)); setProfileEditOpen(true); }}
+              >
+                <Pencil className="size-3" /><span className="hidden sm:inline">{t("edit")}</span>
+              </Button>
+            }
+          >
+            <div className="space-y-4">
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold tracking-tight text-foreground sm:text-xl">{title}</h1>
+                {subtitle ? <p className="mt-0.5 truncate text-sm text-muted-foreground">{subtitle}</p> : null}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Badge variant="secondary" className="rounded-full font-normal">
+                    {categoryLabel(tList, item.category)}
+                  </Badge>
+                  <StatBadge>{item.slug}</StatBadge>
                 </div>
               </div>
-            </div>
-
-            {/* Quick stats grid */}
-            <div className="grid grid-cols-2 divide-x divide-y divide-border/60 sm:grid-cols-4">
-              {[
-                { icon: Calendar, label: t("fieldBirthDate"), value: item.birthDate },
-                { icon: Ruler, label: t("fieldHeightCm"), value: typeof item.heightCm === "number" ? `${item.heightCm} cm` : null },
-                { icon: Palette, label: t("fieldColor"), value: item.color },
-                { icon: User, label: t("fieldOwner"), value: item.owner },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="flex items-start gap-2.5 px-4 py-3">
-                  <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/60" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">{label}</p>
-                    <p className="mt-0.5 truncate text-sm font-medium text-foreground">{value ?? "—"}</p>
+              <div className="grid grid-cols-2 divide-x divide-y divide-border/60 rounded-xl border border-border/60 overflow-hidden sm:grid-cols-4">
+                {[
+                  { icon: Calendar, label: t("fieldBirthDate"), value: item.birthDate },
+                  { icon: Ruler, label: t("fieldHeightCm"), value: typeof item.heightCm === "number" ? `${item.heightCm} cm` : null },
+                  { icon: Palette, label: t("fieldColor"), value: displayColor },
+                  { icon: User, label: t("fieldOwner"), value: item.owner },
+                ].map(({ icon: Icon, label, value }) => (
+                  <div key={label} className="flex items-start gap-2.5 bg-background px-4 py-3">
+                    <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/60" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">{label}</p>
+                      <p className="mt-0.5 truncate text-sm font-medium text-foreground">{value ?? "—"}</p>
+                    </div>
                   </div>
+                ))}
+              </div>
+              {item.notes?.trim() ? (
+                <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldNotes")}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{item.notes}</p>
                 </div>
-              ))}
+              ) : null}
             </div>
-          </div>
+          </Section>
 
           {/* ── Media Gallery ─────────────────────────────────────────────────── */}
           <Section
@@ -764,205 +1131,465 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             )}
           </Section>
 
-          {/* ── Translations ──────────────────────────────────────────────────── */}
-          <Section icon={Globe} title={t("translationsLabel")}
-            badge={
-              <div className="flex gap-1">
-                {(["en", "ar"] as const).map((loc) => (
-                  <span key={loc} className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                    item.translations.some((x) => x.locale === loc)
-                      ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                  )}>{loc}</span>
-                ))}
-              </div>
+          {/* ── Pedigree ───────────────────────────────────────────────────────── */}
+          <Section
+            icon={Network}
+            title={t("pedigreeSection")}
+            description={t("pedigreeSectionHint")}
+            actions={
+              <Button
+                type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
+                disabled={submitting}
+                onClick={() => {
+                  setPedigreeEdit(clonePedigree(item.pedigree));
+                  setPedigreeEditOpen(true);
+                }}
+              >
+                <Pencil className="size-3" /><span className="hidden sm:inline">{t("edit")}</span>
+              </Button>
             }
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              {(["en", "ar"] as const).map((loc) => {
-                const tr = item.translations.find((x) => x.locale === loc) ?? null;
-                const dir = loc === "ar" ? "rtl" : "ltr";
-                return (
-                  <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-foreground">
-                        {loc === "en" ? t("langEn") : t("langAr")}
-                      </p>
-                      <span className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                        tr ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                      )}>{loc}</span>
-                    </div>
-                    <div className="space-y-3" dir={dir}>
-                      <InfoField label={t("fieldName")} value={tr?.name?.trim() ? tr.name : undefined} dir={dir} />
-                      <InfoField label={t("fieldSubtitle")} value={tr?.subtitle?.trim() ? tr.subtitle : undefined} dir={dir} />
-                      <div className="space-y-0.5">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldShortBio")}</p>
-                        <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.shortBio?.trim() ? tr.shortBio : "—"}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldTags")}</p>
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {(tr?.tags ?? []).length ? tr!.tags.map((tag, i) => (
-                            <span key={i} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{tag}</span>
-                          )) : <span className="text-sm text-muted-foreground">—</span>}
-                        </div>
-                      </div>
+            {!pedigreeHasContent(item.pedigree) ? (
+              <p className="text-sm text-muted-foreground">{t("pedigreeEmpty")}</p>
+            ) : (
+              <PedigreeReadonlyCards
+                pedigree={item.pedigree}
+                labels={{
+                  father: t("pedigreeFather"),
+                  mother: t("pedigreeMother"),
+                  grandfather: t("pedigreeGrandfather"),
+                  grandmother: t("pedigreeGrandmother"),
+                  birthDate: t("pedigreeRelativeBirthDate"),
+                  color: t("pedigreeRelativeColor"),
+                }}
+              />
+            )}
+          </Section>
+
+          {(["en", "ar"] as const).map((loc) => {
+            const tr = item.translations.find((x) => x.locale === loc) ?? null;
+            const dir = loc === "ar" ? "rtl" : "ltr";
+            const openEdit = () => {
+              const full = translationsFromItem(item);
+              if (loc === "en") {
+                setTranslationEnForm({ ...full.en });
+                setTranslationEnOpen(true);
+              } else {
+                setTranslationArForm({ ...full.ar });
+                setTranslationArOpen(true);
+              }
+            };
+            return (
+              <Section
+                key={loc}
+                icon={Globe}
+                title={loc === "en" ? t("langEn") : t("langAr")}
+                description={t("translationsLabel")}
+                badge={
+                  <span className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                    tr ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                  )}>{loc}</span>
+                }
+                actions={
+                  <Button
+                    type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
+                    disabled={submitting}
+                    onClick={openEdit}
+                  >
+                    <Pencil className="size-3" /><span className="hidden sm:inline">{t("edit")}</span>
+                  </Button>
+                }
+              >
+                <div className="space-y-3" dir={dir}>
+                  <InfoField label={t("fieldName")} value={tr?.name?.trim() ? tr.name : undefined} dir={dir} />
+                  <InfoField label={t("fieldSubtitle")} value={tr?.subtitle?.trim() ? tr.subtitle : undefined} dir={dir} />
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldShortBio")}</p>
+                    <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.shortBio?.trim() ? tr.shortBio : "—"}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldDescription")}</p>
+                    <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.description?.trim() ? tr.description : "—"}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldTags")}</p>
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {(tr?.tags ?? []).length ? tr!.tags.map((tag, i) => (
+                        <span key={i} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{tag}</span>
+                      )) : <span className="text-sm text-muted-foreground">—</span>}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </Section>
+                  <InfoField label={t("fieldColor")} value={tr?.color?.trim() ? tr.color : undefined} dir={dir} />
+                  <InfoField label={t("fieldBreeder")} value={tr?.breeder?.trim() ? tr.breeder : undefined} dir={dir} />
+                  <InfoField label={t("fieldMetaTitle")} value={tr?.metaTitle?.trim() ? tr.metaTitle : undefined} dir={dir} />
+                  <InfoField label={t("fieldMetaDescription")} value={tr?.metaDescription?.trim() ? tr.metaDescription : undefined} dir={dir} />
+                  <InfoField label={t("fieldSireName")} value={tr?.sireName?.trim() ? tr.sireName : undefined} dir={dir} />
+                  <InfoField label={t("fieldDamName")} value={tr?.damName?.trim() ? tr.damName : undefined} dir={dir} />
+                  <div className="space-y-0.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldBloodline")}</p>
+                    <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.bloodline?.trim() ? tr.bloodline : "—"}</p>
+                  </div>
+                </div>
+              </Section>
+            );
+          })}
         </>
       )}
 
       {/* ══ DIALOGS ════════════════════════════════════════════════════════════ */}
 
-      {/* Edit */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[700px]">
+      {/* Edit profile */}
+      <Dialog
+        open={profileEditOpen}
+        onOpenChange={(open) => {
+          setProfileEditOpen(open);
+          if (!open) setProfileForm(null);
+          else if (item) setProfileForm(profileFormFromItem(item));
+        }}
+      >
+        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[560px]">
           <DialogHeader className="shrink-0 pb-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
                 <Pencil className="size-3.5 text-muted-foreground" />
               </div>
-              {t("dialogEditTitle")}
+              {t("dialogEditProfileTitle")}
             </DialogTitle>
-            <DialogDescription className="text-xs">{t("dialogEditDescription")}</DialogDescription>
+            <DialogDescription className="text-xs">{t("dialogEditProfileDescription")}</DialogDescription>
           </DialogHeader>
           <Separator />
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="grid gap-5 py-4 pr-1">
-              {formError && <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{formError}</p>}
-
-              {/* Base fields */}
-              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("sectionBase")}</p>
+            {profileForm ? (
+              <div className="grid gap-4 py-4 pr-1">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldSlug")}</Label>
-                    <Input value={form.slug} onChange={(e) => setForm((s) => ({ ...s, slug: e.target.value }))} className="h-9" />
+                    <Input
+                      value={profileForm.slug}
+                      onChange={(e) => setProfileForm((s) => (s ? { ...s, slug: e.target.value } : s))}
+                      className="h-9"
+                    />
                   </div>
                   <div className="grid gap-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldCategory")}</Label>
                     <select
                       className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={form.category}
-                      onChange={(e) => setForm((s) => ({ ...s, category: e.target.value as HorseCategory }))}>
-                      {categories.map((c) => <option key={c} value={c}>{categoryLabel(tList, c)}</option>)}
+                      value={profileForm.category}
+                      onChange={(e) =>
+                        setProfileForm((s) => (s ? { ...s, category: e.target.value as HorseCategory } : s))
+                      }
+                    >
+                      {categories.map((c) => (
+                        <option key={c} value={c}>
+                          {categoryLabel(tList, c)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="grid gap-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldBirthDate")}</Label>
-                    <Input type="date" value={form.birthDate} className="h-9"
-                      onChange={(e) => setForm((s) => ({ ...s, birthDate: e.target.value }))} />
+                    <Input
+                      type="date"
+                      value={profileForm.birthDate}
+                      className="h-9"
+                      onChange={(e) => setProfileForm((s) => (s ? { ...s, birthDate: e.target.value } : s))}
+                    />
                   </div>
                   <div className="grid gap-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldHeightCm")}</Label>
-                    <Input inputMode="numeric" value={form.heightCm} className="h-9"
-                      onChange={(e) => setForm((s) => ({ ...s, heightCm: e.target.value }))} />
+                    <Input
+                      inputMode="numeric"
+                      value={profileForm.heightCm}
+                      className="h-9"
+                      onChange={(e) => setProfileForm((s) => (s ? { ...s, heightCm: e.target.value } : s))}
+                    />
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldColor")}</Label>
-                    <Input value={form.color} className="h-9"
-                      onChange={(e) => setForm((s) => ({ ...s, color: e.target.value }))} />
-                  </div>
-                  <div className="grid gap-1.5">
+                  <div className="grid gap-1.5 sm:col-span-2">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldOwner")}</Label>
-                    <Input value={form.owner} className="h-9"
-                      onChange={(e) => setForm((s) => ({ ...s, owner: e.target.value }))} />
+                    <Input
+                      value={profileForm.owner}
+                      className="h-9"
+                      onChange={(e) => setProfileForm((s) => (s ? { ...s, owner: e.target.value } : s))}
+                    />
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldBreeder")}</Label>
-                    <Input value={form.breeder} className="h-9"
-                      onChange={(e) => setForm((s) => ({ ...s, breeder: e.target.value }))} />
-                  </div>
-                  <div className="grid gap-1.5">
+                  <div className="grid gap-1.5 sm:col-span-2">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldNotes")}</Label>
-                    <Input value={form.notes} className="h-9"
-                      onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
+                    <Textarea
+                      value={profileForm.notes}
+                      rows={3}
+                      className="resize-none text-sm"
+                      onChange={(e) => setProfileForm((s) => (s ? { ...s, notes: e.target.value } : s))}
+                    />
                   </div>
                 </div>
-                <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
                   <div>
                     <Label className="text-sm font-medium">{t("fieldIsActive")}</Label>
-                    <p className="text-xs text-muted-foreground">{form.isActive ? tList("active") : tList("inactive")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {profileForm.isActive ? tList("active") : tList("inactive")}
+                    </p>
                   </div>
-                  <Switch checked={form.isActive} onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))} />
+                  <Switch
+                    checked={profileForm.isActive}
+                    onCheckedChange={(v) => setProfileForm((s) => (s ? { ...s, isActive: v } : s))}
+                  />
                 </div>
               </div>
-
-              {/* Cover image */}
-              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldCoverImage")}</Label>
-                <label htmlFor="horse-cover-edit"
-                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30">
-                  <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted shadow-sm transition-colors group-hover:bg-background">
-                    {coverFile ? <ImageIcon className="size-5 text-foreground" /> : <Upload className="size-5 text-muted-foreground" />}
-                  </div>
-                  {coverFile ? (
-                    <div>
-                      <p className="text-sm font-medium">{coverFile.name}</p>
-                      <p className="text-xs text-muted-foreground">{(coverFile.size / 1024).toFixed(1)} KB · {t("clickToReplace")}</p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-medium">{t("clickToUpload")}</p>
-                      <p className="text-xs text-muted-foreground">{t("imageHint")}</p>
-                    </div>
-                  )}
-                  <Input id="horse-cover-edit" type="file" accept="image/*" className="sr-only"
-                    onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)} />
-                </label>
-              </div>
-
-              {/* Translations */}
-              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("translationsLabel")}</p>
-                  <Badge variant="secondary" className="text-xs">{t("required")}</Badge>
-                </div>
-                {(["en", "ar"] as const).map((loc) => {
-                  const dir = loc === "ar" ? "rtl" : "ltr";
-                  const v = form.translations[loc];
-                  return (
-                    <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold">{loc === "en" ? t("langEn") : t("langAr")}</p>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{loc}</span>
-                      </div>
-                      <div className="grid gap-3">
-                        {[
-                          { key: "name" as const, label: t("fieldName"), type: "input" },
-                          { key: "subtitle" as const, label: t("fieldSubtitle"), type: "input" },
-                          { key: "shortBio" as const, label: t("fieldShortBio"), type: "textarea", rows: 2 },
-                          { key: "description" as const, label: t("fieldDescription"), type: "textarea", rows: 4 },
-                          { key: "tags" as const, label: t("fieldTags"), type: "input" },
-                        ].map(({ key, label, type, rows }) => (
-                          <div key={key} className="grid gap-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</Label>
-                            {type === "textarea" ? (
-                              <Textarea dir={dir} rows={rows} value={v[key]}
-                                className="resize-none text-sm"
-                                onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], [key]: e.target.value } } }))} />
-                            ) : (
-                              <Input dir={dir} value={v[key]} className="h-9"
-                                onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], [key]: e.target.value } } }))} />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            ) : null}
           </div>
           <Separator className="shrink-0" />
           <DialogFooter className="shrink-0 gap-2 pt-2">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => setEditOpen(false)}>{t("cancel")}</Button>
-            <Button type="button" disabled={saveDisabled} onClick={() => void onSave()} className="gap-1.5 min-w-24">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setProfileEditOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              disabled={profileSaveDisabled}
+              onClick={() => void onSaveProfile()}
+              className="gap-1.5 min-w-24"
+            >
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
+              {t("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit cover */}
+      <Dialog
+        open={coverEditOpen}
+        onOpenChange={(open) => {
+          setCoverEditOpen(open);
+          if (!open) setCoverEditFile(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
+                <ImageIcon className="size-3.5 text-muted-foreground" />
+              </div>
+              {t("dialogEditCoverTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{t("dialogEditCoverDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3 py-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldCoverImage")}</Label>
+            <label
+              htmlFor="horse-cover-only"
+              className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-muted/20 py-8 text-center transition-colors hover:border-border hover:bg-muted/30"
+            >
+              <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-background shadow-sm transition-colors group-hover:bg-muted">
+                {coverEditFile ? <ImageIcon className="size-5 text-foreground" /> : <Upload className="size-5 text-muted-foreground" />}
+              </div>
+              {coverEditFile ? (
+                <div>
+                  <p className="text-sm font-medium">{coverEditFile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(coverEditFile.size / 1024).toFixed(1)} KB · {t("clickToReplace")}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm font-medium">{t("clickToUpload")}</p>
+                  <p className="text-xs text-muted-foreground">{t("imageHint")}</p>
+                </div>
+              )}
+              <Input
+                id="horse-cover-only"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => setCoverEditFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+          <Separator />
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setCoverEditOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              disabled={submitting || !coverEditFile}
+              onClick={() => void onSaveCover()}
+              className="gap-1.5"
+            >
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+              {t("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit pedigree */}
+      <Dialog
+        open={pedigreeEditOpen}
+        onOpenChange={(open) => {
+          setPedigreeEditOpen(open);
+          if (open && item) setPedigreeEdit(clonePedigree(item.pedigree));
+        }}
+      >
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
+                <Network className="size-3.5 text-muted-foreground" />
+              </div>
+              {t("dialogEditPedigreeTitle")}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{t("dialogEditPedigreeDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3 py-2">
+            {(["father", "mother", "grandfather", "grandmother"] as const).map((pkey) => {
+              const relLabel =
+                pkey === "father"
+                  ? t("pedigreeFather")
+                  : pkey === "mother"
+                    ? t("pedigreeMother")
+                    : pkey === "grandfather"
+                      ? t("pedigreeGrandfather")
+                      : t("pedigreeGrandmother");
+              const rel = pedigreeEdit[pkey] ?? {};
+              return (
+                <div key={pkey} className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                  <p className="mb-2 text-xs font-semibold text-foreground">{relLabel}</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="grid gap-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground">{t("pedigreeRelativeName")}</Label>
+                      <Input
+                        className="h-8 text-sm"
+                        value={rel.name ?? ""}
+                        onChange={(e) => setPedigreeRel(pkey, "name", e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground">{t("pedigreeRelativeBirthDate")}</Label>
+                      <Input
+                        type="date"
+                        className="h-8 text-sm"
+                        value={pedigreeBirthDateForDateInput(rel.birthDate)}
+                        onChange={(e) => setPedigreeRel(pkey, "birthDate", e.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground">{t("pedigreeRelativeColor")}</Label>
+                      <Input
+                        className="h-8 text-sm"
+                        value={rel.color ?? ""}
+                        onChange={(e) => setPedigreeRel(pkey, "color", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <Separator />
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setPedigreeEditOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button type="button" disabled={submitting} onClick={() => void onSavePedigree()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Network className="size-3.5" />}
+              {t("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit English translation */}
+      <Dialog
+        open={translationEnOpen}
+        onOpenChange={(open) => {
+          setTranslationEnOpen(open);
+          if (!open) setTranslationEnForm(null);
+          else if (item) setTranslationEnForm({ ...translationsFromItem(item).en });
+        }}
+      >
+        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[640px]">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
+                <Globe className="size-3.5 text-muted-foreground" />
+              </div>
+              {t("dialogEditTranslationTitle", { locale: t("langEn") })}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{t("dialogEditTranslationDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="min-h-0 flex-1 overflow-y-auto py-2 pr-1">
+            {translationEnForm ? (
+              <TranslationFieldsEditor
+                dir="ltr"
+                value={translationEnForm}
+                onField={(key, v) => setTranslationEnForm((s) => (s ? { ...s, [key]: v } : s))}
+                t={t}
+              />
+            ) : null}
+          </div>
+          <Separator />
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setTranslationEnOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              disabled={translationEnSaveDisabled}
+              onClick={() => void onSaveTranslationEn()}
+              className="gap-1.5"
+            >
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
+              {t("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Arabic translation */}
+      <Dialog
+        open={translationArOpen}
+        onOpenChange={(open) => {
+          setTranslationArOpen(open);
+          if (!open) setTranslationArForm(null);
+          else if (item) setTranslationArForm({ ...translationsFromItem(item).ar });
+        }}
+      >
+        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[640px]">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
+                <Globe className="size-3.5 text-muted-foreground" />
+              </div>
+              {t("dialogEditTranslationTitle", { locale: t("langAr") })}
+            </DialogTitle>
+            <DialogDescription className="text-xs">{t("dialogEditTranslationDescription")}</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="min-h-0 flex-1 overflow-y-auto py-2 pr-1">
+            {translationArForm ? (
+              <TranslationFieldsEditor
+                dir="rtl"
+                value={translationArForm}
+                onField={(key, v) => setTranslationArForm((s) => (s ? { ...s, [key]: v } : s))}
+                t={t}
+              />
+            ) : null}
+          </div>
+          <Separator />
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setTranslationArOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button
+              type="button"
+              disabled={translationArSaveDisabled}
+              onClick={() => void onSaveTranslationAr()}
+              className="gap-1.5"
+            >
               {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
               {t("save")}
             </Button>
@@ -1008,8 +1635,8 @@ export function HorseDetailsPanel({ id }: { id: string }) {
       </Dialog>
 
       {/* Media upload */}
-      <Dialog open={mediaUploadOpen} onOpenChange={setMediaUploadOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+      <Dialog open={mediaUploadOpen} onOpenChange={onMediaUploadDialogOpenChange}>
+        <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <div className="flex size-7 items-center justify-center rounded-lg border bg-muted"><Upload className="size-3.5 text-muted-foreground" /></div>
@@ -1020,8 +1647,63 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           <Separator />
           <div className="grid gap-3 py-1">
             <div className="grid gap-1.5">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tMedia("file")}</Label>
-              <Input type="file" accept="image/*" className="h-9" onChange={(e) => setMediaUploadFile(e.target.files?.[0] ?? null)} />
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tMedia("files")}</Label>
+              <input
+                ref={mediaUploadInputRef}
+                type="file"
+                accept={HORSE_GALLERY_ACCEPT}
+                multiple
+                className="sr-only"
+                onChange={onMediaUploadPick}
+              />
+              <button
+                type="button"
+                onDragEnter={(ev) => { ev.preventDefault(); ev.stopPropagation(); setMediaUploadDropOver(true); }}
+                onDragLeave={(ev) => { ev.preventDefault(); ev.stopPropagation(); setMediaUploadDropOver(false); }}
+                onDragOver={(ev) => { ev.preventDefault(); ev.stopPropagation(); }}
+                onDrop={onMediaUploadDrop}
+                onClick={() => mediaUploadInputRef.current?.click()}
+                className={cn(
+                  "flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center text-xs transition-colors",
+                  mediaUploadDropOver
+                    ? "border-primary/60 bg-primary/5"
+                    : "border-border/80 bg-muted/20 hover:border-border"
+                )}
+              >
+                <span className="pointer-events-none flex flex-col items-center gap-2">
+                  <Upload className="size-6 text-muted-foreground" />
+                  <span className="font-medium text-foreground">{tMedia("dropHint")}</span>
+                  <span className="max-w-[300px] text-muted-foreground">{tMedia("maxFilesHint")}</span>
+                </span>
+              </button>
+              {mediaUploadError ? (
+                <p className="text-xs text-destructive">{mediaUploadError}</p>
+              ) : null}
+              {mediaUploadFiles.length > 0 ? (
+                <ul className="max-h-40 space-y-1.5 overflow-y-auto rounded-lg border border-border/60 bg-muted/10 p-2">
+                  {mediaUploadFiles.map((f, idx) => (
+                    <li key={`${f.name}-${f.size}-${idx}`} className="flex items-center gap-2 text-xs">
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{f.name}</span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {(f.size / 1024).toFixed(0)} KB
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 shrink-0"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          setMediaUploadFiles((prev) => prev.filter((_, i) => i !== idx));
+                          setMediaUploadError(null);
+                        }}
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tMedia("caption")}</Label>
@@ -1030,12 +1712,18 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             <div className="grid gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tMedia("sortOrder")}</Label>
               <Input inputMode="numeric" value={mediaUploadSortOrder} placeholder="0" className="h-9" onChange={(e) => setMediaUploadSortOrder(e.target.value)} />
+              <p className="text-[11px] leading-snug text-muted-foreground">{tMedia("sortOrderHint")}</p>
             </div>
           </div>
           <Separator />
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => setMediaUploadOpen(false)}>{tMedia("cancel")}</Button>
-            <Button type="button" disabled={submitting} onClick={() => void onUploadMedia()} className="gap-1.5">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onMediaUploadDialogOpenChange(false)}>{tMedia("cancel")}</Button>
+            <Button
+              type="button"
+              disabled={submitting || mediaUploadFiles.length === 0}
+              onClick={() => void onUploadMedia()}
+              className="gap-1.5"
+            >
               {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
               {tMedia("upload")}
             </Button>
@@ -1089,7 +1777,12 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           <div className="grid gap-3 py-1">
             <div className="grid gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tMedia("file")}</Label>
-              <Input type="file" accept="image/*" className="h-9" onChange={(e) => setMediaReplaceFile(e.target.files?.[0] ?? null)} />
+              <Input
+                type="file"
+                accept={HORSE_GALLERY_ACCEPT}
+                className="h-9"
+                onChange={(e) => setMediaReplaceFile(e.target.files?.[0] ?? null)}
+              />
             </div>
           </div>
           <Separator />

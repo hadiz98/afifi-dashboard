@@ -26,15 +26,15 @@ Supported locales:
 - **Optional**: `activeOnly` (`true|false`, default `true`)
 
 Returns:
-- `data[]` with minimal fields (optimized for cards): `slug`, `category`, `coverImage`, plus translation fields for the chosen `locale` (`name`, `subtitle`, `shortBio`, `tags`)
+- `data[]` with minimal fields (optimized for cards): `slug`, `category`, `coverImage`, `pedigree`, plus translation fields for the chosen `locale` (`name`, `subtitle`, `shortBio`, `tags`, `color`)
 - `meta` pagination info
 
 ### Horse details by slug (full)
 `GET /api/public/horses/:slug?locale=en`
 
 Returns:
-- base horse fields (category, birthDate, color, coverImage, etc.)
-- `translation` object for the requested locale (includes `description`, pedigree fields, meta)
+- base horse fields: `category`, `birthDate`, `coverImage`, `heightCm`, `owner`, `notes`, `pedigree` (structured relatives, not localized), etc.
+- `translation` for the requested locale (`description`, `color`, `breeder`, `bloodline`, meta, etc.)
 - `media[]` and `awards[]` arrays
 
 ## Staff endpoints (JWT + role)
@@ -62,18 +62,17 @@ Body fields:
 - `slug` (string, unique)
 - `category` (`stallion|mare|filly|colt`)
 - `birthDate` (optional ISO8601 string)
-- `color` (optional)
 - `heightCm` (optional int)
-- `breeder` (optional)
 - `owner` (optional)
 - `notes` (optional)
 - `isActive` (optional: `1/0/true/false`)
-- `translations` (**required**) JSON string (see below)
+- `translations` (optional JSON string): omit on create for a “fast create” flow; when present, must include **both** `en` and `ar` (see below).
+- `pedigree` (optional JSON string): `{ "father"?: { "name"?, "birthDate"?, "color"? }, "mother"?: {...}, "grandfather"?: {...}, "grandmother"?: {...} }` — not localized
 
 File:
 - `coverImage` (optional image)
 
-**Translations JSON (required; must include BOTH `en` and `ar`)**
+**Translations JSON (when sent; must include BOTH `en` and `ar`)**
 
 ```json
 {
@@ -85,8 +84,8 @@ File:
     "tags": ["Champion", "Breeding"],
     "metaTitle": "Afifi Example - Stallion",
     "metaDescription": "SEO description...",
-    "sireName": "Sire Name",
-    "damName": "Dam Name",
+    "color": "Chestnut",
+    "breeder": "Stud farm name",
     "bloodline": "Bloodline text..."
   },
   "ar": {
@@ -97,8 +96,8 @@ File:
     "tags": ["بطل"],
     "metaTitle": "مثال",
     "metaDescription": "وصف...",
-    "sireName": "اسم الأب",
-    "damName": "اسم الأم",
+    "color": "كستنائي",
+    "breeder": "اسم المربي",
     "bloodline": "النسب..."
   }
 }
@@ -107,9 +106,12 @@ File:
 ### Update horse (multipart/form-data)
 `PATCH /api/horses/:id`
 
-- Same fields as create, all optional **except**:\n
-  - `translations` is **required** and will **replace** both locales.
-- `coverImage` is optional; if sent, it replaces the previous file.
+- **Partial update**: include only fields you want to change.
+- Optional body fields (same names as create):
+  - `slug`, `category`, `birthDate`, `heightCm`, `owner`, `notes`, `isActive`
+  - `translations` (optional JSON string): omit when not editing copy. When present, send **only the locale(s) you are updating**, e.g. `{ "en": { ... } }` or `{ "ar": { ... } }`. Each value uses the same shape as one entry in the create example above. The server should **merge** each supplied locale into the existing horse and leave other locales unchanged.
+  - `pedigree` (optional): omit to leave unchanged, or send an empty string / `{}` to clear.
+  - `coverImage` (optional file): replaces the cover when sent.
 
 ### Delete horse (soft delete)
 `DELETE /api/horses/:id`
@@ -121,16 +123,19 @@ All endpoints below require JWT + staff role.
 ### List media
 `GET /api/horses/:id/media`
 
-### Add image
+### Add images (batch)
 `POST /api/horses/:id/media` (multipart/form-data)
 
-- file field: `file` (required)
-- body fields: `caption?`, `sortOrder?`
+- file field: `files` — 1–10 images per request (same field name repeated or multiple files in one part)
+- max **10 MB** per file; types: jpeg, png, webp, gif
+- body fields: `caption?`, `sortOrder?` (applied to all new rows; `sortOrder` is the base value, then +1 for each file)
+
+Returns an array of created media records (`201`).
 
 ### Replace image file
 `PATCH /api/horses/:id/media/:mediaId/file` (multipart/form-data)
 
-- file field: `file` (required)
+- file field: `file` (required); max **10 MB**, same image types as above
 
 Behavior:
 - updates DB `url` to the new file
@@ -152,6 +157,15 @@ Behavior:
 
 ### Reorder media (bulk)
 `PATCH /api/horses/:id/media/reorder` (JSON)
+
+The body can be either a **JSON array** or an object with an **`items`** array:
+
+```json
+[
+  { "id": "media-uuid-1", "sortOrder": 0 },
+  { "id": "media-uuid-2", "sortOrder": 10 }
+]
+```
 
 ```json
 {

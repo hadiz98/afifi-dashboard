@@ -8,15 +8,8 @@ import {
   RefreshCw,
   Upload,
   Image as ImageIcon,
-  Tag,
-  FileText,
-  Text,
   CheckCircle2,
   XCircle,
-  Calendar,
-  Ruler,
-  Palette,
-  User,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -32,7 +25,6 @@ import {
   type HorseCategory,
 } from "@/lib/horses-api";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,9 +39,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
@@ -65,35 +56,6 @@ function categoryLabel(t: (key: string) => string, c: HorseCategory): string {
   }
 }
 
-function parseCommaTags(input: string): string[] {
-  return input.split(",").map((s) => s.trim()).filter(Boolean);
-}
-
-type HorseTranslationsForm = {
-  en: { name: string; subtitle: string; shortBio: string; description: string; tags: string; metaTitle: string; metaDescription: string; sireName: string; damName: string; bloodline: string };
-  ar: { name: string; subtitle: string; shortBio: string; description: string; tags: string; metaTitle: string; metaDescription: string; sireName: string; damName: string; bloodline: string };
-};
-
-function emptyTranslations(): HorseTranslationsForm {
-  const empty = { name: "", subtitle: "", shortBio: "", description: "", tags: "", metaTitle: "", metaDescription: "", sireName: "", damName: "", bloodline: "" };
-  return { en: { ...empty }, ar: { ...empty } };
-}
-
-const createHorseSchema = z.object({
-  slug: z.string().trim().min(1),
-  category: z.enum(categories),
-  isActive: z.boolean().optional(),
-  translations: z.any(),
-});
-
-function hasBothLocalesRequired(tr: HorseTranslationsForm): boolean {
-  return (["en", "ar"] as const).every((loc) => {
-    const t = tr[loc];
-    return t.name.trim().length > 0 && t.shortBio.trim().length > 0 &&
-      t.description.trim().length > 0 && parseCommaTags(t.tags).length > 0;
-  });
-}
-
 function supportedLocales(row: HorseAdminListItem): Set<string> {
   return new Set((row.translations ?? []).map((t) => t.locale));
 }
@@ -105,6 +67,12 @@ function pickName(row: HorseAdminListItem, locale: string): { name: string; subt
   const t = exact ?? fallback ?? null;
   return { name: t?.name?.trim() ? t.name : "—", subtitle: t?.subtitle ?? "" };
 }
+
+const createHorseSchema = z.object({
+  slug: z.string().trim().min(1),
+  category: z.enum(categories),
+  isActive: z.boolean().optional(),
+});
 
 // ─── Small stat badge ──────────────────────────────────────────────────────────
 function StatBadge({ children }: { children: React.ReactNode }) {
@@ -118,6 +86,7 @@ function StatBadge({ children }: { children: React.ReactNode }) {
 export function HorsesPanel() {
   const t = useTranslations("HorsesPage");
   const locale = useLocale();
+  const router = useRouter();
 
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -131,14 +100,21 @@ export function HorsesPanel() {
 
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [form, setForm] = useState<{
-    slug: string; category: HorseCategory; isActive: boolean;
-    birthDate: string; color: string; heightCm: string;
-    breeder: string; owner: string; notes: string;
-    translations: HorseTranslationsForm;
+    slug: string;
+    category: HorseCategory;
+    isActive: boolean;
+    birthDate: string;
+    heightCm: string;
+    owner: string;
+    notes: string;
   }>({
-    slug: "", category: "stallion", isActive: true, birthDate: "",
-    color: "", heightCm: "", breeder: "", owner: "", notes: "",
-    translations: emptyTranslations(),
+    slug: "",
+    category: "stallion",
+    isActive: true,
+    birthDate: "",
+    heightCm: "",
+    owner: "",
+    notes: "",
   });
 
   const load = useCallback(async () => {
@@ -159,44 +135,61 @@ export function HorsesPanel() {
   useEffect(() => { void load(); }, [load]);
 
   const createDisabled = useMemo(() => {
-    const ok = createHorseSchema.safeParse({ slug: form.slug, category: form.category, isActive: form.isActive, translations: form.translations }).success;
-    return submitting || !ok || !hasBothLocalesRequired(form.translations);
+    const ok = createHorseSchema.safeParse({
+      slug: form.slug,
+      category: form.category,
+      isActive: form.isActive,
+    }).success;
+    return submitting || !ok;
   }, [form, submitting]);
+
+  function resetCreateForm() {
+    setCoverFile(null);
+    setForm({
+      slug: "",
+      category: "stallion",
+      isActive: true,
+      birthDate: "",
+      heightCm: "",
+      owner: "",
+      notes: "",
+    });
+    setCreateError(null);
+  }
 
   async function onCreate() {
     setCreateError(null);
-    const parsed = createHorseSchema.safeParse({ slug: form.slug, category: form.category, isActive: form.isActive, translations: form.translations });
-    if (!parsed.success || !hasBothLocalesRequired(form.translations)) { setCreateError(t("createInvalid")); return; }
+    const parsed = createHorseSchema.safeParse({
+      slug: form.slug,
+      category: form.category,
+      isActive: form.isActive,
+    });
+    if (!parsed.success) {
+      setCreateError(t("createInvalid"));
+      return;
+    }
     setSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append("slug", form.slug.trim()); fd.append("category", form.category);
+      fd.append("slug", form.slug.trim());
+      fd.append("category", form.category);
       fd.append("isActive", form.isActive ? "1" : "0");
       if (form.birthDate.trim()) fd.append("birthDate", form.birthDate.trim());
-      if (form.color.trim()) fd.append("color", form.color.trim());
       if (form.heightCm.trim()) fd.append("heightCm", form.heightCm.trim());
-      if (form.breeder.trim()) fd.append("breeder", form.breeder.trim());
       if (form.owner.trim()) fd.append("owner", form.owner.trim());
       if (form.notes.trim()) fd.append("notes", form.notes.trim());
-      const translationsPayload = (["en", "ar"] as const).reduce((acc, loc) => {
-        const tt = form.translations[loc];
-        acc[loc] = {
-          name: tt.name.trim(), subtitle: tt.subtitle.trim(), description: tt.description.trim(),
-          shortBio: tt.shortBio.trim(), tags: parseCommaTags(tt.tags), metaTitle: tt.metaTitle.trim(),
-          metaDescription: tt.metaDescription.trim(), sireName: tt.sireName.trim(),
-          damName: tt.damName.trim(), bloodline: tt.bloodline.trim(),
-        };
-        return acc;
-      }, {} as Record<string, unknown>);
-      fd.append("translations", JSON.stringify(translationsPayload));
       if (coverFile) fd.append("coverImage", coverFile);
-      await createHorse(fd);
-      toast.success(t("createSuccess"));
-      setCreateOpen(false); setCoverFile(null);
-      setForm({ slug: "", category: "stallion", isActive: true, birthDate: "", color: "", heightCm: "", breeder: "", owner: "", notes: "", translations: emptyTranslations() });
+      const created = await createHorse(fd);
+      toast.success(t("createSuccessNavigate"));
+      setCreateOpen(false);
+      resetCreateForm();
       await load();
-    } catch (e) { toastApiError(e, t("createError")); }
-    finally { setSubmitting(false); }
+      router.push(`/horses/${encodeURIComponent(created.id)}`);
+    } catch (e) {
+      toastApiError(e, t("createError"));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -418,8 +411,11 @@ export function HorsesPanel() {
       </div>
 
       {/* ══ Create dialog ══════════════════════════════════════════════════════ */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[680px]">
+      <Dialog open={createOpen} onOpenChange={(open) => {
+        setCreateOpen(open);
+        if (!open) resetCreateForm();
+      }}>
+        <DialogContent className="flex max-h-[92dvh] flex-col overflow-hidden sm:max-w-[520px]">
           <DialogHeader className="shrink-0 pb-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
@@ -438,7 +434,6 @@ export function HorsesPanel() {
                 <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{createError}</p>
               )}
 
-              {/* Base fields */}
               <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("sectionBase")}</p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -467,21 +462,11 @@ export function HorsesPanel() {
                       onChange={(e) => setForm((s) => ({ ...s, heightCm: e.target.value }))} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldColor")}</Label>
-                    <Input value={form.color} className="h-9" placeholder={t("placeholderColor")}
-                      onChange={(e) => setForm((s) => ({ ...s, color: e.target.value }))} />
-                  </div>
-                  <div className="grid gap-1.5">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldOwner")}</Label>
                     <Input value={form.owner} className="h-9" placeholder={t("placeholderOwner")}
                       onChange={(e) => setForm((s) => ({ ...s, owner: e.target.value }))} />
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldBreeder")}</Label>
-                    <Input value={form.breeder} className="h-9" placeholder={t("placeholderBreeder")}
-                      onChange={(e) => setForm((s) => ({ ...s, breeder: e.target.value }))} />
-                  </div>
-                  <div className="grid gap-1.5">
+                  <div className="grid gap-1.5 sm:col-span-2">
                     <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("fieldNotes")}</Label>
                     <Input value={form.notes} className="h-9" placeholder={t("placeholderNotes")}
                       onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
@@ -496,7 +481,6 @@ export function HorsesPanel() {
                 </div>
               </div>
 
-              {/* Cover image */}
               <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldCoverImage")}</Label>
                 <label htmlFor="horse-cover"
@@ -518,47 +502,6 @@ export function HorsesPanel() {
                   <Input id="horse-cover" type="file" accept="image/*" className="sr-only"
                     onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)} />
                 </label>
-              </div>
-
-              {/* Translations */}
-              <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("translationsLabel")}</p>
-                  <Badge variant="secondary" className="text-xs">{t("required")}</Badge>
-                </div>
-
-                {(["en", "ar"] as const).map((loc) => {
-                  const dir = loc === "ar" ? "rtl" : "ltr";
-                  const v = form.translations[loc];
-                  return (
-                    <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold">{loc === "en" ? t("langEn") : t("langAr")}</p>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{loc}</span>
-                      </div>
-                      <div className="grid gap-3">
-                        {[
-                          { key: "name" as const, label: t("fieldName"), type: "input" },
-                          { key: "subtitle" as const, label: t("fieldSubtitle"), type: "input" },
-                          { key: "shortBio" as const, label: t("fieldShortBio"), type: "textarea", rows: 2 },
-                          { key: "description" as const, label: t("fieldDescription"), type: "textarea", rows: 4 },
-                          { key: "tags" as const, label: t("fieldTags"), type: "input", placeholder: t("placeholderTags") },
-                        ].map(({ key, label, type, rows, placeholder }) => (
-                          <div key={key} className="grid gap-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</Label>
-                            {type === "textarea" ? (
-                              <Textarea dir={dir} rows={rows} value={v[key]} className="resize-none text-sm"
-                                onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], [key]: e.target.value } } }))} />
-                            ) : (
-                              <Input dir={dir} value={v[key]} className="h-9" placeholder={placeholder}
-                                onChange={(e) => setForm((s) => ({ ...s, translations: { ...s.translations, [loc]: { ...s.translations[loc], [key]: e.target.value } } }))} />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
           </div>

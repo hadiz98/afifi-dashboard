@@ -6,6 +6,20 @@ import { ApiError } from "@/lib/api-error";
 export type HorseLocale = "en" | "ar";
 export type HorseCategory = "stallion" | "mare" | "filly" | "colt";
 
+/** Structured pedigree on the horse record (not localized). API may send object or JSON string. */
+export type HorsePedigreeRelative = {
+  name?: string | null;
+  birthDate?: string | null;
+  color?: string | null;
+};
+
+export type HorsePedigree = {
+  father?: HorsePedigreeRelative | null;
+  mother?: HorsePedigreeRelative | null;
+  grandfather?: HorsePedigreeRelative | null;
+  grandmother?: HorsePedigreeRelative | null;
+};
+
 export type HorseTranslation = {
   locale: HorseLocale;
   name: string;
@@ -15,6 +29,9 @@ export type HorseTranslation = {
   tags: string[];
   metaTitle?: string | null;
   metaDescription?: string | null;
+  /** Localized coat color (README); legacy APIs may only expose root `HorseDetails.color`). */
+  color?: string | null;
+  breeder?: string | null;
   sireName?: string | null;
   damName?: string | null;
   bloodline?: string | null;
@@ -34,11 +51,14 @@ export type HorseAdminListItem = {
 
 export type HorseDetails = HorseAdminListItem & {
   birthDate?: string | null;
+  /** Legacy/root color when translation-level `color` is absent */
   color?: string | null;
   heightCm?: number | null;
+  /** Legacy/root breeder when translation-level `breeder` is absent */
   breeder?: string | null;
   owner?: string | null;
   notes?: string | null;
+  pedigree?: HorsePedigree | null;
   media?: HorseMedia[];
   awards?: HorseAward[];
 };
@@ -125,6 +145,48 @@ function normalizeTags(raw: unknown): string[] {
   return [];
 }
 
+function readOptionalTrimmedString(obj: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    if (!(key in obj)) continue;
+    const v = obj[key];
+    if (v === null || v === undefined) continue;
+    if (typeof v === "string") return v.trim() || null;
+  }
+  return null;
+}
+
+function normalizePedigreeRelative(data: unknown): HorsePedigreeRelative | null {
+  if (!data || typeof data !== "object") return null;
+  const o = data as Record<string, unknown>;
+  const name = readOptionalTrimmedString(o, ["name"]);
+  const birthDate = readOptionalTrimmedString(o, ["birthDate", "birth_date"]);
+  const color = readOptionalTrimmedString(o, ["color"]);
+  if (!name && !birthDate && !color) return null;
+  return { name: name ?? null, birthDate: birthDate ?? null, color: color ?? null };
+}
+
+export function normalizePedigreeRaw(raw: unknown): HorsePedigree | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (!s || s === "{}") return null;
+    try {
+      const parsed = JSON.parse(s) as unknown;
+      return normalizePedigreeRaw(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const father = normalizePedigreeRelative(o.father);
+  const mother = normalizePedigreeRelative(o.mother);
+  const grandfather = normalizePedigreeRelative(o.grandfather);
+  const grandmother = normalizePedigreeRelative(o.grandmother);
+  if (!father && !mother && !grandfather && !grandmother) return null;
+  return { father, mother, grandfather, grandmother };
+}
+
 function normalizeTranslation(data: unknown): HorseTranslation | null {
   if (!data || typeof data !== "object") return null;
   const o = data as Record<string, unknown>;
@@ -141,6 +203,8 @@ function normalizeTranslation(data: unknown): HorseTranslation | null {
     tags: normalizeTags(o.tags),
     metaTitle: pickString(o, ["metaTitle", "meta_title"]) ?? null,
     metaDescription: pickString(o, ["metaDescription", "meta_description"]) ?? null,
+    color: readOptionalTrimmedString(o, ["color"]),
+    breeder: readOptionalTrimmedString(o, ["breeder"]),
     sireName: pickString(o, ["sireName", "sire_name"]) ?? null,
     damName: pickString(o, ["damName", "dam_name"]) ?? null,
     bloodline: pickString(o, ["bloodline"]) ?? null,
@@ -243,6 +307,7 @@ export function normalizeHorseDetails(data: unknown): HorseDetails | null {
   const base = normalizeHorseAdminListItem(data);
   if (!base) return null;
   const o = data as Record<string, unknown>;
+  const pedigreeRaw = o.pedigree;
   return {
     ...base,
     birthDate: pickString(o, ["birthDate", "birth_date"]) ?? null,
@@ -251,6 +316,7 @@ export function normalizeHorseDetails(data: unknown): HorseDetails | null {
     breeder: pickString(o, ["breeder"]) ?? null,
     owner: pickString(o, ["owner"]) ?? null,
     notes: pickString(o, ["notes"]) ?? null,
+    pedigree: normalizePedigreeRaw(pedigreeRaw),
     media: Array.isArray(o.media)
       ? o.media
           .map((x) => normalizeHorseMedia(x))
@@ -273,12 +339,14 @@ export type PublicHorseListItem = {
   slug: string;
   category: HorseCategory;
   coverImage?: string | null;
+  pedigree?: HorsePedigree | null;
   translation: {
     locale: HorseLocale;
     name: string;
     subtitle: string;
     shortBio: string;
     tags: string[];
+    color?: string | null;
   } | null;
 };
 
@@ -292,6 +360,7 @@ export type PublicHorseDetails = {
   breeder?: string | null;
   owner?: string | null;
   notes?: string | null;
+  pedigree?: HorsePedigree | null;
   translation: HorseTranslation | null;
   media: HorseMedia[];
   awards: HorseAward[];
@@ -306,6 +375,7 @@ function normalizePublicTranslation(data: unknown, locale: HorseLocale): PublicH
     subtitle: pickString(o, ["subtitle"]) ?? "",
     shortBio: pickString(o, ["shortBio", "short_bio"]) ?? "",
     tags: normalizeTags(o.tags),
+    color: readOptionalTrimmedString(o, ["color"]),
   };
 }
 
@@ -324,6 +394,7 @@ function normalizePublicHorseListItem(data: unknown, locale: HorseLocale): Publi
     slug,
     category,
     coverImage: coverImageRaw ? normalizeHorseCoverImagePath(coverImageRaw) : null,
+    pedigree: normalizePedigreeRaw(o.pedigree),
     translation,
   };
 }
@@ -347,16 +418,21 @@ function normalizePublicHorseDetails(data: unknown, locale: HorseLocale): Public
   const awards = Array.isArray(o.awards)
     ? o.awards.map((x) => normalizeHorseAward(x)).filter((x): x is HorseAward => x !== null)
     : [];
+  const trColor = translation?.color ?? null;
+  const trBreeder = translation?.breeder ?? null;
+  const rootColor = pickString(o, ["color"]) ?? null;
+  const rootBreeder = pickString(o, ["breeder"]) ?? null;
   return {
     slug,
     category,
     coverImage: coverImageRaw ? normalizeHorseCoverImagePath(coverImageRaw) : null,
     birthDate: pickString(o, ["birthDate", "birth_date"]) ?? null,
-    color: pickString(o, ["color"]) ?? null,
+    color: trColor ?? rootColor,
     heightCm: pickNumber(o, ["heightCm", "height_cm"]) ?? null,
-    breeder: pickString(o, ["breeder"]) ?? null,
+    breeder: trBreeder ?? rootBreeder,
     owner: pickString(o, ["owner"]) ?? null,
     notes: pickString(o, ["notes"]) ?? null,
+    pedigree: normalizePedigreeRaw(o.pedigree),
     translation,
     media,
     awards,
@@ -532,19 +608,32 @@ export async function fetchHorseMedia(horseId: string): Promise<HorseMedia[]> {
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 }
 
+/**
+ * POST /api/horses/:id/media — multipart field `files` (1–10 images).
+ * Optional `caption` / `sortOrder` apply to each new row; backend uses sortOrder for the first file then +1.
+ */
 export async function addHorseMedia(
   horseId: string,
-  params: { file: File; caption?: string; sortOrder?: number }
-): Promise<HorseMedia> {
+  params: { files: File[]; caption?: string; sortOrder?: number }
+): Promise<HorseMedia[]> {
+  if (!params.files.length) {
+    throw new ApiError("At least one image file is required", { statusCode: 400 });
+  }
   const fd = new FormData();
-  fd.append("file", params.file);
+  for (const f of params.files) {
+    fd.append("files", f);
+  }
   if (params.caption?.trim()) fd.append("caption", params.caption.trim());
-  if (typeof params.sortOrder === "number") fd.append("sortOrder", String(params.sortOrder));
+  if (typeof params.sortOrder === "number" && Number.isFinite(params.sortOrder)) {
+    fd.append("sortOrder", String(params.sortOrder));
+  }
   const res = await apiFetch(`/api/horses/${encodeURIComponent(horseId)}/media`, { method: "POST", body: fd });
   const raw = await readApiData<unknown>(res);
-  const item = normalizeHorseMedia(raw);
-  if (!item) throw new ApiError("Invalid media create response", { statusCode: 502 });
-  return item;
+  const items = unwrapListFromReadApi(raw)
+    .map((x) => normalizeHorseMedia(x))
+    .filter((x): x is HorseMedia => x !== null);
+  if (!items.length) throw new ApiError("Invalid media create response", { statusCode: 502 });
+  return items;
 }
 
 export async function replaceHorseMediaFile(horseId: string, mediaId: string, file: File): Promise<HorseMedia> {

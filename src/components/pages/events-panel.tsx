@@ -18,6 +18,12 @@ import { toast } from "sonner";
 
 import { toastApiError } from "@/lib/toast-api-error";
 import {
+  anyEventFullContentOverLimit,
+  buildEventTranslationsPayload,
+  hasBothEventLocalesComplete,
+  type EventLocaleFormRow,
+} from "@/lib/events-form-helpers";
+import {
   createEvent,
   fetchEventsPage,
   normalizeEventImagePath,
@@ -25,6 +31,8 @@ import {
   type EventAdminListItem,
   type EventLocale,
 } from "@/lib/events-api";
+import { META_DESCRIPTION_MAX_LENGTH, META_TITLE_MAX_LENGTH } from "@/lib/full-content-constants";
+import { RichTextHtmlEditor } from "@/components/rich-text/rich-text-html-editor";
 
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -50,27 +58,17 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 
-type TranslationsForm = Record<
-  EventLocale,
-  { title: string; subtitle: string; description: string }
->;
+type TranslationsForm = Record<EventLocale, EventLocaleFormRow>;
 
 function emptyTranslations(): TranslationsForm {
-  return {
-    en: { title: "", subtitle: "", description: "" },
-    ar: { title: "", subtitle: "", description: "" },
+  const row: EventLocaleFormRow = {
+    title: "",
+    subtitle: "",
+    fullContent: "",
+    metaTitle: "",
+    metaDescription: "",
   };
-}
-
-function hasBothTranslationsRequired(tr: TranslationsForm): boolean {
-  return (["en", "ar"] as const).every((loc) => {
-    const v = tr[loc];
-    return (
-      v.title.trim().length > 0 &&
-      v.subtitle.trim().length > 0 &&
-      v.description.trim().length > 0
-    );
-  });
+  return { en: { ...row }, ar: { ...row } };
 }
 
 function formatWhen(iso: string | null | undefined, locale: string): string {
@@ -156,7 +154,8 @@ export function EventsPanel() {
       endsAt: form.endsAt ?? null,
     });
     if (!parsed.success) return true;
-    if (!hasBothTranslationsRequired(form.translations)) return true;
+    if (!hasBothEventLocalesComplete(form.translations)) return true;
+    if (anyEventFullContentOverLimit(form.translations)) return true;
     if (form.endsAt && form.startsAt && form.endsAt < form.startsAt) return true;
     return false;
   }, [form, submitting]);
@@ -168,7 +167,11 @@ export function EventsPanel() {
       startsAt: form.startsAt ?? undefined,
       endsAt: form.endsAt ?? null,
     });
-    if (!parsed.success || !hasBothTranslationsRequired(form.translations)) {
+    if (
+      !parsed.success ||
+      !hasBothEventLocalesComplete(form.translations) ||
+      anyEventFullContentOverLimit(form.translations)
+    ) {
       setCreateError(t("createInvalid"));
       return;
     }
@@ -183,21 +186,7 @@ export function EventsPanel() {
       fd.append("startsAt", form.startsAt!.toISOString());
       if (form.endsAt) fd.append("endsAt", form.endsAt.toISOString());
       fd.append("isActive", form.isActive ? "1" : "0");
-      fd.append(
-        "translations",
-        JSON.stringify({
-          en: {
-            title: form.translations.en.title.trim(),
-            subtitle: form.translations.en.subtitle.trim(),
-            description: form.translations.en.description.trim(),
-          },
-          ar: {
-            title: form.translations.ar.title.trim(),
-            subtitle: form.translations.ar.subtitle.trim(),
-            description: form.translations.ar.description.trim(),
-          },
-        }),
-      );
+      fd.append("translations", JSON.stringify(buildEventTranslationsPayload(form.translations)));
       if (imageFile) fd.append("image", imageFile);
       await createEvent(fd);
       toast.success(t("createSuccess"));
@@ -520,52 +509,113 @@ export function EventsPanel() {
                         </span>
                       </div>
                       <div className="grid gap-3">
-                        {(
-                          [
-                            { key: "title" as const, label: t("fieldTitle"), type: "input" },
-                            { key: "subtitle" as const, label: t("fieldSubtitle"), type: "input" },
-                            { key: "description" as const, label: t("fieldDescription"), type: "textarea", rows: 4 },
-                          ] as const
-                        ).map(({ key, label, type, ...rest }) => (
-                          <div key={key} className="grid gap-1.5">
-                            <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                              {label}
-                              <RequiredStar />
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            {t("fieldTitle")}
+                            <RequiredStar />
+                          </Label>
+                          <Input
+                            dir={dir}
+                            value={v.title}
+                            className="h-9"
+                            onChange={(e) =>
+                              setForm((s) => ({
+                                ...s,
+                                translations: {
+                                  ...s.translations,
+                                  [loc]: { ...s.translations[loc], title: e.target.value },
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            {t("fieldSubtitle")}
+                            <RequiredStar />
+                          </Label>
+                          <Input
+                            dir={dir}
+                            value={v.subtitle}
+                            className="h-9"
+                            onChange={(e) =>
+                              setForm((s) => ({
+                                ...s,
+                                translations: {
+                                  ...s.translations,
+                                  [loc]: { ...s.translations[loc], subtitle: e.target.value },
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            {t("fieldFullContent")}
+                            <RequiredStar />
+                          </Label>
+                          <RichTextHtmlEditor
+                            value={v.fullContent}
+                            dir={dir}
+                            onChange={(html) =>
+                              setForm((s) => ({
+                                ...s,
+                                translations: {
+                                  ...s.translations,
+                                  [loc]: { ...s.translations[loc], fullContent: html },
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t("seoSection")}
+                          </p>
+                          <div className="grid gap-1.5">
+                            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                              {t("fieldMetaTitle")}
                             </Label>
-                            {type === "textarea" ? (
-                              <Textarea
-                                dir={dir}
-                                rows={"rows" in rest ? (rest as { rows: number }).rows : 4}
-                                value={v[key]}
-                                className="resize-none text-sm"
-                                onChange={(e) =>
-                                  setForm((s) => ({
-                                    ...s,
-                                    translations: {
-                                      ...s.translations,
-                                      [loc]: { ...s.translations[loc], [key]: e.target.value },
-                                    },
-                                  }))
-                                }
-                              />
-                            ) : (
-                              <Input
-                                dir={dir}
-                                value={v[key]}
-                                className="h-9"
-                                onChange={(e) =>
-                                  setForm((s) => ({
-                                    ...s,
-                                    translations: {
-                                      ...s.translations,
-                                      [loc]: { ...s.translations[loc], [key]: e.target.value },
-                                    },
-                                  }))
-                                }
-                              />
-                            )}
+                            <Input
+                              dir={dir}
+                              maxLength={META_TITLE_MAX_LENGTH}
+                              value={v.metaTitle}
+                              className="h-9"
+                              onChange={(e) =>
+                                setForm((s) => ({
+                                  ...s,
+                                  translations: {
+                                    ...s.translations,
+                                    [loc]: { ...s.translations[loc], metaTitle: e.target.value },
+                                  },
+                                }))
+                              }
+                            />
+                            <p className="text-[10px] text-muted-foreground">{t("fieldMetaTitleHint")}</p>
                           </div>
-                        ))}
+                          <div className="grid gap-1.5">
+                            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                              {t("fieldMetaDescription")}
+                            </Label>
+                            <Textarea
+                              dir={dir}
+                              maxLength={META_DESCRIPTION_MAX_LENGTH}
+                              rows={2}
+                              value={v.metaDescription}
+                              className="resize-none text-sm"
+                              onChange={(e) =>
+                                setForm((s) => ({
+                                  ...s,
+                                  translations: {
+                                    ...s.translations,
+                                    [loc]: { ...s.translations[loc], metaDescription: e.target.value },
+                                  },
+                                }))
+                              }
+                            />
+                            <p className="text-[10px] text-muted-foreground">{t("fieldMetaDescriptionHint")}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );

@@ -1,0 +1,3 @@
+export const FULL_CONTENT_MAX_LENGTH = 50_000;
+export const META_TITLE_MAX_LENGTH = 255;
+export const META_DESCRIPTION_MAX_LENGTH = 500;

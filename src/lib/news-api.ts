@@ -8,9 +8,10 @@ export type NewsTranslation = {
   locale: NewsLocale;
   title: string;
   subtitle: string;
-  description?: string | null;
+  fullContent?: string | null;
   tags?: string[] | null;
-  subDescription?: string | null;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
 };
 
 export type NewsItem = {
@@ -61,6 +62,15 @@ function pickString(obj: Record<string, unknown>, keys: string[]): string | unde
   return undefined;
 }
 
+function pickNullableString(obj: Record<string, unknown>, keys: string[]): string | null | undefined {
+  for (const key of keys) {
+    const v = obj[key];
+    if (v === null) return null;
+    if (typeof v === "string") return v;
+  }
+  return undefined;
+}
+
 function pickBoolean(obj: Record<string, unknown>, keys: string[]): boolean | undefined {
   for (const key of keys) {
     const v = obj[key];
@@ -106,15 +116,29 @@ function normalizeTranslation(data: unknown): NewsTranslation | null {
   if (locale !== "en" && locale !== "ar") return null;
   const title = pickString(o, ["title"]);
   if (!title) return null;
-  const description = pickString(o, ["description"]) ?? null;
   const tags = pickTags(o) ?? null;
+  const fullFromApi = pickNullableString(o, ["fullContent", "full_content"]);
+  const legacyDesc = pickNullableString(o, ["description"]);
+  const fullContent =
+    typeof fullFromApi === "string"
+      ? fullFromApi
+      : fullFromApi === null
+        ? null
+        : typeof legacyDesc === "string"
+          ? legacyDesc
+          : legacyDesc === null
+            ? null
+            : null;
+  const metaTitle = pickNullableString(o, ["metaTitle", "meta_title"]);
+  const metaDescription = pickNullableString(o, ["metaDescription", "meta_description"]);
   return {
     locale,
     title,
-    subtitle: pickString(o, ["subtitle"]) ?? "",
-    description,
+    subtitle: pickString(o, ["subtitle"]) ?? (typeof o.subtitle === "string" ? o.subtitle : ""),
+    fullContent,
     tags,
-    subDescription: pickString(o, ["subDescription", "sub_description"]) ?? null,
+    metaTitle: metaTitle === undefined ? undefined : metaTitle,
+    metaDescription: metaDescription === undefined ? undefined : metaDescription,
   };
 }
 

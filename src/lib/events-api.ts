@@ -9,7 +9,9 @@ export type EventTranslation = {
   locale: EventLocale;
   title: string;
   subtitle: string;
-  description?: string | null;
+  fullContent?: string | null;
+  metaTitle?: string | null;
+  metaDescription?: string | null;
 };
 
 export type EventAdminListItem = {
@@ -42,7 +44,14 @@ export type PublicEventDetails = {
   image?: string | null;
   isActive?: boolean;
   translation:
-    | { locale: EventLocale; title: string; subtitle: string; description: string }
+    | {
+        locale: EventLocale;
+        title: string;
+        subtitle: string;
+        fullContent: string;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
+      }
     | null;
 };
 
@@ -69,6 +78,15 @@ function pickString(obj: Record<string, unknown>, keys: string[]): string | unde
   for (const key of keys) {
     const v = obj[key];
     if (typeof v === "string" && v.length > 0) return v;
+  }
+  return undefined;
+}
+
+function pickNullableString(obj: Record<string, unknown>, keys: string[]): string | null | undefined {
+  for (const key of keys) {
+    const v = obj[key];
+    if (v === null) return null;
+    if (typeof v === "string") return v;
   }
   return undefined;
 }
@@ -103,11 +121,27 @@ function normalizeTranslation(data: unknown): EventTranslation | null {
   if (!locale) return null;
   const title = pickString(o, ["title"]);
   if (!title) return null;
+  const fullFromApi = pickNullableString(o, ["fullContent", "full_content"]);
+  const legacyDesc = pickNullableString(o, ["description"]);
+  const fullContent =
+    typeof fullFromApi === "string"
+      ? fullFromApi
+      : fullFromApi === null
+        ? null
+        : typeof legacyDesc === "string"
+          ? legacyDesc
+          : legacyDesc === null
+            ? null
+            : null;
+  const metaTitle = pickNullableString(o, ["metaTitle", "meta_title"]);
+  const metaDescription = pickNullableString(o, ["metaDescription", "meta_description"]);
   return {
     locale,
     title,
-    subtitle: pickString(o, ["subtitle"]) ?? "",
-    description: pickString(o, ["description"]) ?? null,
+    subtitle: pickString(o, ["subtitle"]) ?? (typeof o.subtitle === "string" ? o.subtitle : ""),
+    fullContent,
+    metaTitle: metaTitle === undefined ? undefined : metaTitle,
+    metaDescription: metaDescription === undefined ? undefined : metaDescription,
   };
 }
 
@@ -271,7 +305,12 @@ function normalizePublicEventDetails(data: unknown, locale: EventLocale): Public
         locale,
         title: pickString(trObj, ["title"]) ?? "",
         subtitle: pickString(trObj, ["subtitle"]) ?? "",
-        description: pickString(trObj, ["description"]) ?? "",
+        fullContent:
+          pickNullableString(trObj, ["fullContent", "full_content"]) ??
+          pickNullableString(trObj, ["description"]) ??
+          "",
+        metaTitle: pickNullableString(trObj, ["metaTitle", "meta_title"]),
+        metaDescription: pickNullableString(trObj, ["metaDescription", "meta_description"]),
       }
     : null;
   return {

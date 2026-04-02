@@ -386,6 +386,8 @@
     "langAr": "العربية",
     "required": "مطلوب",
     "translationsBothRequired": "أضف الترجمات باللغتين (الإنجليزية والعربية) مع العنوان والوصف والوسوم.",
+    "translationsAtLeastOneRequired": "أكمل لغة واحدة على الأقل بالعنوان والنص الكامل والوسوم.",
+    "fullContentMax": "يجب ألا يتجاوز النص الكامل 50,000 حرف.",
     "imageMaxSize": "يجب ألا يتجاوز حجم الصورة 5 ميغابايت.",
     "imageBadType": "نوع الصورة يجب أن يكون JPG أو PNG أو WEBP أو GIF.",
     "imageOptionalHint": "اختياري: اتركها فارغة للاحتفاظ بالصورة الحالية.",
@@ -404,7 +406,13 @@
     "fieldTitle": "عنوان",
     "fieldSubtitle": "العنوان الفرعي",
     "fieldDescription": "الوصف",
+    "fieldFullContent": "المحتوى الكامل",
     "fieldSubDescription": "وصف إضافي",
+    "seoSection": "تحسين محركات البحث",
+    "fieldMetaTitle": "عنوان الميتا",
+    "fieldMetaTitleHint": "اختياري. يظهر في نتائج البحث كعنوان.",
+    "fieldMetaDescription": "وصف الميتا",
+    "fieldMetaDescriptionHint": "اختياري. ملخص قصير لمحركات البحث (حد أقصى 500 حرف).",
     "placeholderTitle": "عنوان الخبر…",
     "placeholderSubtitle": "ملخص قصير…",
     "placeholderDescription": "المحتوى الرئيسي…",
@@ -471,7 +479,15 @@
     "clearTranslations": "مسح الترجمات",
     "update": "حفظ التحديث",
     "sectionBase": "التفاصيل",
-    "translationsLabel": "الترجمات"
+    "translationsLabel": "الترجمات",
+    "fieldFullContent": "المحتوى الكامل",
+    "seoSection": "تحسين محركات البحث",
+    "fieldMetaTitle": "عنوان الميتا",
+    "fieldMetaTitleHint": "اختياري. يظهر في نتائج البحث كعنوان.",
+    "fieldMetaDescription": "وصف الميتا",
+    "fieldMetaDescriptionHint": "اختياري. ملخص قصير لمحركات البحث (حد أقصى 500 حرف).",
+    "translationsAtLeastOneRequired": "أكمل لغة واحدة على الأقل بالعنوان والنص الكامل والوسوم.",
+    "fullContentMax": "يجب ألا يتجاوز النص الكامل 50,000 حرف."
   },
   "HorsesPage": {
     "title": "الخيل",
@@ -733,9 +749,15 @@
     "fieldTitle": "العنوان",
     "fieldSubtitle": "العنوان الفرعي",
     "fieldDescription": "الوصف",
+    "fieldFullContent": "المحتوى الكامل",
+    "seoSection": "تحسين محركات البحث",
+    "fieldMetaTitle": "عنوان الميتا",
+    "fieldMetaTitleHint": "اختياري. يظهر في نتائج البحث كعنوان.",
+    "fieldMetaDescription": "وصف الميتا",
+    "fieldMetaDescriptionHint": "اختياري. ملخص قصير لمحركات البحث (حد أقصى 500 حرف).",
     "cancel": "إلغاء",
     "create": "إنشاء",
-    "createInvalid": "يرجى تعبئة الحقول المطلوبة وإضافة الترجمات باللغتين (EN و AR).",
+    "createInvalid": "يرجى تعبئة الحقول المطلوبة والترجمات باللغتين (EN و AR) ومحتوى كامل صالح بأقل من 50,000 حرف.",
     "endsBeforeStarts": "يجب أن يكون وقت الانتهاء بعد وقت البدء.",
     "clickToUpload": "انقر للرفع",
     "clickToReplace": "انقر للاستبدال",
@@ -787,8 +809,13 @@
     "deleteError": "تعذر حذف الفعالية",
     "cancel": "إلغاء",
     "clickToUpload": "انقر للرفع",
-    "clickToReplace": "انقر للاستبدال"
+    "clickToReplace": "انقر للاستبدال",
+    "fieldFullContent": "المحتوى الكامل",
+    "seoSection": "تحسين محركات البحث",
+    "fieldMetaTitle": "عنوان الميتا",
+    "fieldMetaTitleHint": "اختياري. يظهر في نتائج البحث كعنوان.",
+    "fieldMetaDescription": "وصف الميتا",
+    "fieldMetaDescriptionHint": "اختياري. ملخص قصير لمحركات البحث (حد أقصى 500 حرف)."
   }
-  }
-  
+}
 

@@ -39,8 +39,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const GALLERY_TOTAL_MAX = 20;
-const GALLERY_MAX_FILES_PER_REQUEST = 20;
+const GALLERY_TOTAL_MAX = 21;
+const GALLERY_MAX_FILES_PER_REQUEST = 21;
 const GALLERY_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const GALLERY_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
 

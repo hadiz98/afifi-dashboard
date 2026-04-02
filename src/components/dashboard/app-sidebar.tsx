@@ -15,6 +15,7 @@ import {
   User,
   Users,
   Images,
+  Settings,
 } from "lucide-react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
@@ -47,6 +48,7 @@ type NavLabelKey =
   | "horses"
   | "events"
   | "gallery"
+  | "settings"
   | "users"
   | "roles";
 
@@ -62,6 +64,7 @@ const allNavDefs: readonly NavDef[] = [
   { href: "/", labelKey: "home", icon: LayoutDashboard },
   { href: "/news", labelKey: "news", icon: Newspaper },
   { href: "/gallery", labelKey: "gallery", icon: Images, staffOnly: true },
+  { href: "/settings", labelKey: "settings", icon: Settings, staffOnly: true },
   {
     href: "/newsletter",
     labelKey: "newsletter",

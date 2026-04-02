@@ -16,6 +16,7 @@ import {
   Users,
   Images,
   Settings,
+  ChevronDown,
 } from "lucide-react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
@@ -23,6 +24,12 @@ import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { clearAuthSession } from "@/lib/auth-session";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -91,6 +98,8 @@ export function AppSidebar() {
   const navDefs = allNavDefs.filter(
     (item) => !item.staffOnly || (ready && isStaff)
   );
+  const packedKeys: readonly NavLabelKey[] = ["users", "roles", "profile", "password"];
+  const mainNavDefs = navDefs.filter((x) => !packedKeys.includes(x.labelKey));
 
   function navActive(href: string): boolean {
     if (href === "/") return pathname === "/";
@@ -137,10 +146,12 @@ export function AppSidebar() {
 
   return (
     <Sidebar
-      side="right"
+      side={locale === "ar" ? "right" : "left"}
       collapsible="icon"
       dir={locale === "ar" ? "rtl" : "ltr"}
-      className="border-inline-start border-border"
+      className={cn(
+        locale === "ar" ? "border-inline-start border-border" : "border-inline-end border-border"
+      )}
     >
       <SidebarHeader className="border-b border-border px-3 py-4 sm:px-4 sm:py-5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
         <SidebarMenu className="group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:items-center">
@@ -155,11 +166,11 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="flex-1 overflow-hidden px-3 py-4 sm:px-4 sm:py-5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
+      <SidebarContent className="flex-1 px-3 py-4 sm:px-4 sm:py-5 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
         <SidebarGroup>
           <SidebarGroupContent className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
             <SidebarMenu className="w-full gap-1.5 group-data-[collapsible=icon]:items-center">
-              {navDefs.map(({ href, labelKey, icon: Icon }) => {
+              {mainNavDefs.map(({ href, labelKey, icon: Icon }) => {
                 const isActive = navActive(href);
                 const label = t(labelKey);
 
@@ -205,6 +216,51 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+
+              {/* Packed dropdown: users/roles/profile/password */}
+              <SidebarMenuItem className="mx-1.5 w-full group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <SidebarMenuButton
+                        tooltip={t("more")}
+                        className={cn(
+                          "min-h-12 text-sm font-medium transition-all duration-200",
+                          "hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring"
+                        )}
+                      />
+                    }
+                  >
+                    <User className="size-4 shrink-0" aria-hidden />
+                    <span className="truncate group-data-[collapsible=icon]:hidden">
+                      {t("more")}
+                    </span>
+                    <ChevronDown className="ms-auto size-4 shrink-0 opacity-70 group-data-[collapsible=icon]:hidden" aria-hidden />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" side="bottom" className="min-w-44">
+                    {ready && isStaff ? (
+                      <>
+                        <DropdownMenuItem onClick={() => router.push("/users")}>
+                          <Users className="size-4" aria-hidden />
+                          {t("users")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push("/roles")}>
+                          <Shield className="size-4" aria-hidden />
+                          {t("roles")}
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                    <DropdownMenuItem onClick={() => router.push("/profile")}>
+                      <User className="size-4" aria-hidden />
+                      {t("profile")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push("/password")}>
+                      <KeyRound className="size-4" aria-hidden />
+                      {t("password")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

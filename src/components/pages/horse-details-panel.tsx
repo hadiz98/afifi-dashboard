@@ -76,6 +76,7 @@ import { RequiredStar } from "@/components/ui/required-star";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 const categories: readonly HorseCategory[] = ["stallion", "mare", "filly", "colt"];
@@ -478,6 +479,9 @@ export function HorseDetailsPanel({ id }: { id: string }) {
   const [translationEnForm, setTranslationEnForm] = useState<TranslationLocaleFields | null>(null);
   const [translationArOpen, setTranslationArOpen] = useState(false);
   const [translationArForm, setTranslationArForm] = useState<TranslationLocaleFields | null>(null);
+  const [translationTab, setTranslationTab] = useState<HorseLocale>(
+    locale === "ar" ? "ar" : "en"
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1177,74 +1181,102 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             )}
           </Section>
 
-          {(["en", "ar"] as const).map((loc) => {
-            const tr = item.translations.find((x) => x.locale === loc) ?? null;
-            const dir = loc === "ar" ? "rtl" : "ltr";
-            const openEdit = () => {
-              const full = translationsFromItem(item);
-              if (loc === "en") {
-                setTranslationEnForm({ ...full.en });
-                setTranslationEnOpen(true);
-              } else {
-                setTranslationArForm({ ...full.ar });
-                setTranslationArOpen(true);
-              }
-            };
-            return (
-              <Section
-                key={loc}
-                icon={Globe}
-                title={loc === "en" ? t("langEn") : t("langAr")}
-                description={t("translationsLabel")}
-                badge={
-                  <span className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                    tr ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                  )}>{loc}</span>
-                }
-                actions={
-                  <Button
-                    type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
-                    disabled={submitting}
-                    onClick={openEdit}
+          <Section
+            icon={Globe}
+            title={t("translationsLabel")}
+            badge={
+              <div className="flex gap-1">
+                {(["en", "ar"] as const).map((loc) => (
+                  <span
+                    key={loc}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                      item.translations.some((x) => x.locale === loc)
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    )}
                   >
-                    <Pencil className="size-3" /><span className="hidden sm:inline">{t("edit")}</span>
-                  </Button>
-                }
+                    {loc}
+                  </span>
+                ))}
+              </div>
+            }
+            actions={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                disabled={submitting}
+                onClick={() => {
+                  const full = translationsFromItem(item);
+                  if (translationTab === "en") {
+                    setTranslationEnForm({ ...full.en });
+                    setTranslationEnOpen(true);
+                  } else {
+                    setTranslationArForm({ ...full.ar });
+                    setTranslationArOpen(true);
+                  }
+                }}
               >
-                <div className="space-y-3" dir={dir}>
-                  <InfoField label={t("fieldName")} value={tr?.name?.trim() ? tr.name : undefined} dir={dir} />
-                  <InfoField label={t("fieldSubtitle")} value={tr?.subtitle?.trim() ? tr.subtitle : undefined} dir={dir} />
-                  <div className="space-y-0.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldShortBio")}</p>
-                    <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.shortBio?.trim() ? tr.shortBio : "—"}</p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldDescription")}</p>
-                    <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.description?.trim() ? tr.description : "—"}</p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldTags")}</p>
-                    <div className="flex flex-wrap gap-1 pt-0.5">
-                      {(tr?.tags ?? []).length ? tr!.tags.map((tag, i) => (
-                        <span key={i} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{tag}</span>
-                      )) : <span className="text-sm text-muted-foreground">—</span>}
+                <Pencil className="size-3" />
+                <span className="hidden sm:inline">{t("edit")}</span>
+              </Button>
+            }
+          >
+            <Tabs
+              value={translationTab}
+              onValueChange={(v) => setTranslationTab((v as HorseLocale) === "ar" ? "ar" : "en")}
+            >
+              <TabsList className="w-full justify-between sm:w-auto sm:justify-start">
+                <TabsTrigger value="en" className="flex-1 sm:flex-none">
+                  {t("langEn")}
+                </TabsTrigger>
+                <TabsTrigger value="ar" className="flex-1 sm:flex-none">
+                  {t("langAr")}
+                </TabsTrigger>
+              </TabsList>
+
+              {(["en", "ar"] as const).map((loc) => {
+                const tr = item.translations.find((x) => x.locale === loc) ?? null;
+                const dir = loc === "ar" ? "rtl" : "ltr";
+                return (
+                  <TabsContent key={loc} value={loc}>
+                    <div className="space-y-3" dir={dir}>
+                      <InfoField label={t("fieldName")} value={tr?.name?.trim() ? tr.name : undefined} dir={dir} />
+                      <InfoField label={t("fieldSubtitle")} value={tr?.subtitle?.trim() ? tr.subtitle : undefined} dir={dir} />
+                      <div className="space-y-0.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldShortBio")}</p>
+                        <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.shortBio?.trim() ? tr.shortBio : "—"}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldDescription")}</p>
+                        <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.description?.trim() ? tr.description : "—"}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldTags")}</p>
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {(tr?.tags ?? []).length ? tr!.tags.map((tag, i) => (
+                            <span key={i} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{tag}</span>
+                          )) : <span className="text-sm text-muted-foreground">—</span>}
+                        </div>
+                      </div>
+                      <InfoField label={t("fieldColor")} value={tr?.color?.trim() ? tr.color : undefined} dir={dir} />
+                      <InfoField label={t("fieldBreeder")} value={tr?.breeder?.trim() ? tr.breeder : undefined} dir={dir} />
+                      <InfoField label={t("fieldMetaTitle")} value={tr?.metaTitle?.trim() ? tr.metaTitle : undefined} dir={dir} />
+                      <InfoField label={t("fieldMetaDescription")} value={tr?.metaDescription?.trim() ? tr.metaDescription : undefined} dir={dir} />
+                      <InfoField label={t("fieldSireName")} value={tr?.sireName?.trim() ? tr.sireName : undefined} dir={dir} />
+                      <InfoField label={t("fieldDamName")} value={tr?.damName?.trim() ? tr.damName : undefined} dir={dir} />
+                      <div className="space-y-0.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldBloodline")}</p>
+                        <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.bloodline?.trim() ? tr.bloodline : "—"}</p>
+                      </div>
                     </div>
-                  </div>
-                  <InfoField label={t("fieldColor")} value={tr?.color?.trim() ? tr.color : undefined} dir={dir} />
-                  <InfoField label={t("fieldBreeder")} value={tr?.breeder?.trim() ? tr.breeder : undefined} dir={dir} />
-                  <InfoField label={t("fieldMetaTitle")} value={tr?.metaTitle?.trim() ? tr.metaTitle : undefined} dir={dir} />
-                  <InfoField label={t("fieldMetaDescription")} value={tr?.metaDescription?.trim() ? tr.metaDescription : undefined} dir={dir} />
-                  <InfoField label={t("fieldSireName")} value={tr?.sireName?.trim() ? tr.sireName : undefined} dir={dir} />
-                  <InfoField label={t("fieldDamName")} value={tr?.damName?.trim() ? tr.damName : undefined} dir={dir} />
-                  <div className="space-y-0.5">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">{t("fieldBloodline")}</p>
-                    <p className="whitespace-pre-wrap text-sm text-foreground" dir={dir}>{tr?.bloodline?.trim() ? tr.bloodline : "—"}</p>
-                  </div>
-                </div>
-              </Section>
-            );
-          })}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+          </Section>
         </>
       )}
 

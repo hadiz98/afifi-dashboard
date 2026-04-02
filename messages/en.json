@@ -77,6 +77,9 @@
     "invalidCropJson": "Cover crop must be valid JSON.",
     "coverTooLarge": "Cover image must be 10 MB or smaller.",
     "coverInvalidType": "Cover image must be JPEG, PNG, WebP, or GIF.",
+    "removeCover": "Remove cover image",
+    "coverRemoveSuccess": "Cover image removed",
+    "coverRemoveError": "Could not remove cover image",
     "key": {
       "home": "Home",
       "farm": "Farm",

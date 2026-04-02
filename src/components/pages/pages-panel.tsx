@@ -14,6 +14,7 @@ import {
   Layers,
   Pencil,
   RefreshCw,
+  Trash2,
   Upload,
   XCircle,
   Info,
@@ -22,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/toast-api-error";
 import {
+  deletePageCover,
   fetchPageByKey,
   fetchPages,
   type PageKey,
@@ -461,6 +463,7 @@ export function PagesPanel() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<StaffPage[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [removingCover, setRemovingCover] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editKey, setEditKey] = useState<PageKey | null>(null);
@@ -593,10 +596,36 @@ export function PagesPanel() {
     }
   }
 
+  async function onRemoveCover() {
+    const key = editKey;
+    if (!key || !editCoverImageUrl || editCoverFile) return;
+    setRemovingCover(true);
+    try {
+      const page = await deletePageCover(key);
+      setRows((prev) => prev.map((p) => (p.key === key ? page : p)));
+      setEditCoverImageUrl(page.coverImage ?? null);
+      setEditForm((s) => ({
+        ...s,
+        coverCrop:
+          page.coverCrop == null
+            ? ""
+            : typeof page.coverCrop === "string"
+              ? page.coverCrop
+              : JSON.stringify(page.coverCrop, null, 2),
+      }));
+      toast.success(t("coverRemoveSuccess"));
+    } catch (e) {
+      toastApiError(e, t("coverRemoveError"));
+    } finally {
+      setRemovingCover(false);
+    }
+  }
+
   // ── Close dialog ──
   function closeDialog() {
     setEditOpen(false);
     setEditKey(null);
+    setRemovingCover(false);
     setEditCoverFile(null);
     setEditCoverImageUrl(null);
     setCoverPreviewUrl((prev) => {
@@ -747,12 +776,29 @@ export function PagesPanel() {
                     {t("coverImage")}
                   </Label>
                   {editCoverImageUrl && !editCoverFile ? (
-                    <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
-                      <img
-                        src={editCoverImageUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                    <div className="grid gap-2">
+                      <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
+                        <img
+                          src={editCoverImageUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 self-start border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={submitting || removingCover || editLoading}
+                        onClick={() => void onRemoveCover()}
+                      >
+                        {removingCover ? (
+                          <RefreshCw className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
+                        {t("removeCover")}
+                      </Button>
                     </div>
                   ) : null}
                   <input

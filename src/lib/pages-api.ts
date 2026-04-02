@@ -246,3 +246,14 @@ export async function deletePage(key: PageKey): Promise<void> {
   await readApiData<unknown>(res);
 }
 
+/** Removes the page cover image (and related crop on the server, if applicable). */
+export async function deletePageCover(key: PageKey): Promise<StaffPage> {
+  const res = await apiFetch(`/api/pages/${encodeURIComponent(key)}/cover`, {
+    method: "DELETE",
+  });
+  const raw = await readApiData<unknown>(res);
+  const fromBody = tryNormalizeStaffPage(raw);
+  if (fromBody) return fromBody;
+  return fetchPageByKey(key);
+}
+

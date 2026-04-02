@@ -77,6 +77,9 @@
     "invalidCropJson": "يجب أن يكون قص الغلاف JSON صالحاً.",
     "coverTooLarge": "يجب أن تكون صورة الغلاف 10 MB أو أقل.",
     "coverInvalidType": "يجب أن تكون صورة الغلاف JPEG أو PNG أو WebP أو GIF.",
+    "removeCover": "إزالة صورة الغلاف",
+    "coverRemoveSuccess": "تمت إزالة صورة الغلاف",
+    "coverRemoveError": "تعذرت إزالة صورة الغلاف",
     "key": {
       "home": "الرئيسية",
       "farm": "المزرعة",

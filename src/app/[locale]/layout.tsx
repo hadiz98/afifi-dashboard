@@ -50,6 +50,29 @@ export async function generateMetadata({
   const { locale } = await params;
   return {
     title: locale === "ar" ? "لوحة تحكم عفيفي" : "Afifi Dashboard",
+    icons: {
+      icon: [
+        {
+          url: "/logo200x80.png",
+          type: "image/png",
+          sizes: "200x80",
+        },
+      ],
+      shortcut: [
+        {
+          url: "/logo200x80.png",
+          type: "image/png",
+          sizes: "200x80",
+        },
+      ],
+      apple: [
+        {
+          url: "/logo200x80.png",
+          type: "image/png",
+          sizes: "200x80",
+        },
+      ],
+    },
   };
 }
 

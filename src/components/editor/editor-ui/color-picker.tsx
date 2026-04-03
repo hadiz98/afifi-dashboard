@@ -251,6 +251,10 @@ declare global {
 const colorFormats = ["hex", "rgb", "hsl", "hsb"] as const
 type ColorFormat = (typeof colorFormats)[number]
 
+function isColorFormat(v: unknown): v is ColorFormat {
+  return typeof v === "string" && (colorFormats as readonly string[]).includes(v)
+}
+
 interface ColorValue {
   r: number
   g: number
@@ -620,7 +624,6 @@ interface ColorPickerStoreState {
 
 interface ColorPickerStoreCallbacks {
   onColorChange?: (colorString: string) => void
-  onOpenChange?: (open: boolean) => void
   onFormatChange?: (format: ColorFormat) => void
 }
 
@@ -688,10 +691,6 @@ function createColorPickerStore(
       if (Object.is(stateRef.current.open, value)) return
 
       stateRef.current.open = value
-
-      if (callbacks?.onOpenChange) {
-        callbacks.onOpenChange(value)
-      }
 
       store.notify()
     },
@@ -832,10 +831,9 @@ const ColorPickerRoot = React.memo((props: ColorPickerRootProps) => {
   const storeCallbacks = React.useMemo<ColorPickerStoreCallbacks>(
     () => ({
       onColorChange: onValueChange,
-      onOpenChange: onOpenChange,
       onFormatChange: onFormatChange,
     }),
-    [onValueChange, onOpenChange, onFormatChange]
+    [onValueChange, onFormatChange]
   )
 
   const store = React.useMemo(
@@ -931,10 +929,13 @@ function ColorPickerRootImpl(props: ColorPickerRootImplProps) {
 
   const open = useColorPickerStore((state) => state.open)
 
+  type OnOpenChangeFn = NonNullable<typeof onOpenChange>
+  type OpenChangeEventDetails = Parameters<OnOpenChangeFn>[1]
+
   const onPopoverOpenChange = React.useCallback(
-    (newOpen: boolean) => {
+    (newOpen: boolean, eventDetails: OpenChangeEventDetails) => {
       store.setOpen(newOpen)
-      onOpenChange?.(newOpen)
+      onOpenChange?.(newOpen, eventDetails)
     },
     [store.setOpen, onOpenChange]
   )
@@ -989,6 +990,10 @@ interface ColorPickerTriggerProps
 function ColorPickerTrigger(props: ColorPickerTriggerProps) {
   const context = useColorPickerContext("ColorPickerTrigger")
   const { render, children, disabled, className, ...rest } = props
+  // Base UI's `className` can be a function of PopoverTriggerState.
+  // Our Button component expects a function of ButtonState instead, so we
+  // only forward plain string className for the default trigger render.
+  const resolvedClassName = typeof className === "string" ? className : undefined
 
   return (
     <PopoverTrigger
@@ -1000,7 +1005,7 @@ function ColorPickerTrigger(props: ColorPickerTriggerProps) {
             type="button"
             variant="outline"
             size="icon-sm"
-            className={className}
+            className={resolvedClassName}
             {...rest}
           />
         )
@@ -1015,8 +1020,7 @@ interface ColorPickerContentProps
   extends React.ComponentProps<typeof PopoverContent> {}
 
 function ColorPickerContent(props: ColorPickerContentProps) {
-  const { asChild: _asChild, className, children, ...popoverContentProps } =
-    props
+  const { className, children, ...popoverContentProps } = props
   const context = useColorPickerContext("ColorPickerContent")
 
   if (context.inline) {
@@ -1165,9 +1169,10 @@ function ColorPickerHueSlider(props: ColorPickerHueSliderProps) {
   const hsv = useColorPickerStore((state) => state.hsv)
 
   const onValueChange = React.useCallback(
-    (value: number) => {
+    (value: number | readonly number[], _eventDetails: unknown) => {
+      const next = Array.isArray(value) ? value[0] ?? 0 : value
       const newHsv: HSVColorValue = {
-        h: value,
+        h: next,
         s: hsv?.s ?? 0,
         v: hsv?.v ?? 0,
         a: hsv?.a ?? 1,
@@ -1222,8 +1227,9 @@ function ColorPickerAlphaSlider(props: ColorPickerAlphaSliderProps) {
   const hsv = useColorPickerStore((state) => state.hsv)
 
   const onValueChange = React.useCallback(
-    (value: number) => {
-      const alpha = value / 100
+    (value: number | readonly number[], _eventDetails: unknown) => {
+      const next = Array.isArray(value) ? value[0] ?? 0 : value
+      const alpha = next / 100
       const newColor = { ...color, a: alpha }
       const newHsv = { ...hsv, a: alpha }
       store.setColor(newColor)
@@ -1405,8 +1411,8 @@ function ColorPickerFormatSelect({
   const disabled = disabledProp ?? context.disabled
 
   const onFormatChange = React.useCallback(
-    (value: ColorFormat | null) => {
-      if (value != null) store.setFormat(value)
+    (value: unknown, _eventDetails: unknown) => {
+      if (isColorFormat(value)) store.setFormat(value)
     },
     [store]
   )

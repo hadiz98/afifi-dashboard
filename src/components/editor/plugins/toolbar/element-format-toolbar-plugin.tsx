@@ -92,7 +92,8 @@ export function ElementFormatToolbarPlugin({
 
   useUpdateToolbarHandler($updateToolbar)
 
-  const handleValueChange = (value: string) => {
+  const handleValueChange = (values: string[]) => {
+    const value = values[0]
     if (!value) return // Prevent unselecting current value
 
     setElementFormat(value as ElementFormatType)
@@ -112,9 +113,8 @@ export function ElementFormatToolbarPlugin({
   return (
     <>
       <ToggleGroup
-        type="single"
-        value={elementFormat}
-        defaultValue={elementFormat}
+        value={[elementFormat]}
+        defaultValue={[elementFormat]}
         onValueChange={handleValueChange}
       >
         {/* Alignment toggles */}
@@ -133,9 +133,8 @@ export function ElementFormatToolbarPlugin({
       {separator && <Separator orientation="vertical" className="!h-7" />}
       {/* Indentation toggles */}
       <ToggleGroup
-        type="single"
-        value={elementFormat}
-        defaultValue={elementFormat}
+        value={[elementFormat]}
+        defaultValue={[elementFormat]}
         onValueChange={handleValueChange}
       >
         <ToggleGroupItem

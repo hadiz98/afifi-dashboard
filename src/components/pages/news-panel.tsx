@@ -779,15 +779,23 @@ export function NewsPanel() {
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t("fieldImage")}
                 </Label>
-                <label htmlFor="news-image"
-                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30">
+                <label
+                  htmlFor="news-create-image"
+                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30"
+                >
                   <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted shadow-sm transition-colors group-hover:bg-background">
-                    {imageFile ? <ImageIcon className="size-5 text-foreground" /> : <Upload className="size-5 text-muted-foreground" />}
+                    {imageFile ? (
+                      <ImageIcon className="size-5 text-foreground" />
+                    ) : (
+                      <Upload className="size-5 text-muted-foreground" />
+                    )}
                   </div>
                   {imageFile ? (
                     <div>
                       <p className="text-sm font-medium">{imageFile.name}</p>
-                      <p className="text-xs text-muted-foreground">{(imageFile.size / 1024).toFixed(1)} KB · {t("clickToReplace")}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(imageFile.size / 1024).toFixed(1)} KB · {t("clickToReplace")}
+                      </p>
                     </div>
                   ) : (
                     <div>
@@ -795,8 +803,16 @@ export function NewsPanel() {
                       <p className="text-xs text-muted-foreground">{t("imageOptionalHint")}</p>
                     </div>
                   )}
-                  <Input id="news-image" type="file" accept="image/*" className="sr-only"
-                    onChange={(e) => { setImageFile(e.target.files?.[0] ?? null); setCreateErrors((er) => ({ ...er, image: undefined })); }} />
+                  <Input
+                    id="news-create-image"
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      setImageFile(e.target.files?.[0] ?? null);
+                      setCreateErrors((er) => ({ ...er, image: undefined }));
+                    }}
+                  />
                 </label>
                 {createErrors.image && (
                   <p className="text-xs text-destructive">{createErrors.image}</p>

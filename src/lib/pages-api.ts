@@ -5,6 +5,7 @@ import { ApiError } from "@/lib/api-error";
 
 export type PageLocale = "en" | "ar";
 export type PageKey = "home" | "farm" | "news" | "events" | "horses" | "contact";
+export type PageTitleColor = "black" | "white";
 
 export type PageTranslation = {
   locale: PageLocale;
@@ -20,6 +21,7 @@ export type PublicPageResponse = {
   coverImage?: string | null;
   coverCrop?: unknown | null;
   isActive?: boolean;
+  titleColor?: PageTitleColor;
   translation: Omit<PageTranslation, "locale">;
 };
 
@@ -28,10 +30,16 @@ export type StaffPage = {
   coverImage?: string | null;
   coverCrop?: unknown | null;
   isActive?: boolean;
+  titleColor?: PageTitleColor;
   translations: Array<PageTranslation>;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
+
+function parseTitleColor(v: unknown): PageTitleColor | undefined {
+  if (v === "black" || v === "white") return v;
+  return undefined;
+}
 
 function apiBase(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -143,6 +151,7 @@ function normalizeStaffPage(raw: unknown): StaffPage | null {
   const coverImage = coverImageRaw ? normalizePageCoverImagePath(coverImageRaw) : null;
   const coverCrop = parseMaybeJson(o.coverCrop);
   const isActive = parseOptionalBoolean(o.isActive);
+  const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
   const translationsRaw = translationsArrayFromRaw(o.translations);
   const parsed = translationsRaw
     .map((x) => normalizeStaffTranslation(x))
@@ -154,7 +163,7 @@ function normalizeStaffPage(raw: unknown): StaffPage | null {
   const translations = Array.from(byLocale.values());
   const createdAt = typeof o.createdAt === "string" ? o.createdAt : null;
   const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt : null;
-  return { key: o.key, coverImage, coverCrop, isActive, translations, createdAt, updatedAt };
+  return { key: o.key, coverImage, coverCrop, isActive, titleColor, translations, createdAt, updatedAt };
 }
 
 function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | null {
@@ -164,6 +173,7 @@ function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | n
   const coverImage = coverImageRaw ? normalizePageCoverImagePath(coverImageRaw) : null;
   const coverCrop = parseMaybeJson(o.coverCrop);
   const isActive = typeof o.isActive === "boolean" ? o.isActive : undefined;
+  const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
   const trRaw = o.translation;
   if (!trRaw || typeof trRaw !== "object") return null;
   const trObj = trRaw as Record<string, unknown>;
@@ -180,6 +190,7 @@ function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | n
     coverImage,
     coverCrop,
     isActive,
+    titleColor,
     translation: { title, text, subtitle, metaDescription, metaKeywords },
   };
 }
@@ -225,12 +236,16 @@ export async function fetchPageByKey(key: PageKey): Promise<StaffPage> {
 export async function upsertPage(params: {
   key: PageKey;
   isActive?: boolean;
+  titleColor?: PageTitleColor;
   coverCropJson?: string;
   translationsJson?: string;
   coverFile?: File | null;
 }): Promise<StaffPage> {
   const fd = new FormData();
   if (typeof params.isActive === "boolean") fd.append("isActive", params.isActive ? "1" : "0");
+  if (params.titleColor === "black" || params.titleColor === "white") {
+    fd.append("titleColor", params.titleColor);
+  }
   if (typeof params.coverCropJson === "string") fd.append("coverCrop", params.coverCropJson);
   if (typeof params.translationsJson === "string") fd.append("translations", params.translationsJson);
   if (params.coverFile) fd.append("coverImage", params.coverFile);

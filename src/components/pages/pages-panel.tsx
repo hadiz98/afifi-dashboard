@@ -28,6 +28,7 @@ import {
   fetchPages,
   type PageKey,
   type PageLocale,
+  type PageTitleColor,
   type PageTranslation,
   type StaffPage,
   upsertPage,
@@ -112,6 +113,7 @@ type TranslationForm = {
 
 type PageEditForm = {
   isActive: boolean;
+  titleColor: PageTitleColor;
   coverCrop: string;
   en: TranslationForm;
   ar: TranslationForm;
@@ -154,6 +156,7 @@ function formFromPage(page: StaffPage | null): PageEditForm {
         : JSON.stringify(page.coverCrop, null, 2);
   return {
     isActive: page?.isActive !== false,
+    titleColor: page?.titleColor === "black" ? "black" : "white",
     coverCrop: crop,
     en: trFromRow(en),
     ar: trFromRow(ar),
@@ -581,6 +584,7 @@ export function PagesPanel() {
       const saved = await upsertPage({
         key,
         isActive: editForm.isActive,
+        titleColor: editForm.titleColor,
         coverCropJson: cropJson,
         translationsJson: buildTranslationsJson(editForm),
         coverFile: editCoverFile ?? undefined,
@@ -768,6 +772,34 @@ export function PagesPanel() {
                     checked={editForm.isActive}
                     onCheckedChange={(v) => setEditForm((s) => ({ ...s, isActive: v }))}
                   />
+                </div>
+
+                {/* Title color */}
+                <div className="grid gap-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                  <div>
+                    <Label className="text-sm font-semibold">{t("titleColor")}</Label>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{t("titleColorHint")}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant={editForm.titleColor === "white" ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => setEditForm((s) => ({ ...s, titleColor: "white" }))}
+                    >
+                      {t("titleColorWhite")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={editForm.titleColor === "black" ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => setEditForm((s) => ({ ...s, titleColor: "black" }))}
+                    >
+                      {t("titleColorBlack")}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Cover image upload (optional — new file replaces server cover when saved) */}

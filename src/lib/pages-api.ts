@@ -10,6 +10,7 @@ export type PageTitleColor = "black" | "white";
 export type PageTranslation = {
   locale: PageLocale;
   title: string;
+  titleColor?: PageTitleColor;
   subtitle?: string | null;
   text: string;
   metaDescription?: string | null;
@@ -30,7 +31,6 @@ export type StaffPage = {
   coverImage?: string | null;
   coverCrop?: unknown | null;
   isActive?: boolean;
-  titleColor?: PageTitleColor;
   translations: Array<PageTranslation>;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -102,10 +102,11 @@ function normalizeTranslation(raw: unknown, locale?: PageLocale): PageTranslatio
   const text = typeof o.text === "string" ? o.text : "";
   if (!title.trim() || !text.trim()) return null;
   const subtitle = typeof o.subtitle === "string" ? o.subtitle : null;
+  const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
   const metaDescription =
     typeof o.metaDescription === "string" ? o.metaDescription : o.metaDescription == null ? null : null;
   const metaKeywords = typeof o.metaKeywords === "string" ? o.metaKeywords : o.metaKeywords == null ? null : null;
-  return { locale: loc, title, text, subtitle, metaDescription, metaKeywords };
+  return { locale: loc, title, titleColor, text, subtitle, metaDescription, metaKeywords };
 }
 
 function parseOptionalBoolean(v: unknown): boolean | undefined {
@@ -122,11 +123,12 @@ function normalizeStaffTranslation(raw: unknown, locale?: PageLocale): PageTrans
   if (loc !== "en" && loc !== "ar") return null;
   const title = typeof o.title === "string" ? o.title : "";
   const text = typeof o.text === "string" ? o.text : "";
+  const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
   const subtitle = typeof o.subtitle === "string" ? o.subtitle : o.subtitle == null ? null : null;
   const metaDescription =
     typeof o.metaDescription === "string" ? o.metaDescription : o.metaDescription == null ? null : null;
   const metaKeywords = typeof o.metaKeywords === "string" ? o.metaKeywords : o.metaKeywords == null ? null : null;
-  return { locale: loc, title, text, subtitle, metaDescription, metaKeywords };
+  return { locale: loc, title, titleColor, text, subtitle, metaDescription, metaKeywords };
 }
 
 function translationsArrayFromRaw(translationsRaw: unknown): unknown[] {
@@ -151,7 +153,6 @@ function normalizeStaffPage(raw: unknown): StaffPage | null {
   const coverImage = coverImageRaw ? normalizePageCoverImagePath(coverImageRaw) : null;
   const coverCrop = parseMaybeJson(o.coverCrop);
   const isActive = parseOptionalBoolean(o.isActive);
-  const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
   const translationsRaw = translationsArrayFromRaw(o.translations);
   const parsed = translationsRaw
     .map((x) => normalizeStaffTranslation(x))
@@ -163,7 +164,7 @@ function normalizeStaffPage(raw: unknown): StaffPage | null {
   const translations = Array.from(byLocale.values());
   const createdAt = typeof o.createdAt === "string" ? o.createdAt : null;
   const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt : null;
-  return { key: o.key, coverImage, coverCrop, isActive, titleColor, translations, createdAt, updatedAt };
+  return { key: o.key, coverImage, coverCrop, isActive, translations, createdAt, updatedAt };
 }
 
 function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | null {
@@ -236,16 +237,12 @@ export async function fetchPageByKey(key: PageKey): Promise<StaffPage> {
 export async function upsertPage(params: {
   key: PageKey;
   isActive?: boolean;
-  titleColor?: PageTitleColor;
   coverCropJson?: string;
   translationsJson?: string;
   coverFile?: File | null;
 }): Promise<StaffPage> {
   const fd = new FormData();
   if (typeof params.isActive === "boolean") fd.append("isActive", params.isActive ? "1" : "0");
-  if (params.titleColor === "black" || params.titleColor === "white") {
-    fd.append("titleColor", params.titleColor);
-  }
   if (typeof params.coverCropJson === "string") fd.append("coverCrop", params.coverCropJson);
   if (typeof params.translationsJson === "string") fd.append("translations", params.translationsJson);
   if (params.coverFile) fd.append("coverImage", params.coverFile);

@@ -434,6 +434,8 @@
     "fieldImage": "Image (optional)",
     "cancel": "Cancel",
     "create": "Create",
+    "imageHint": "JPG/PNG/WEBP/GIF up to 5MB.",
+
     "createSuccess": "News created",
     "createError": "Could not create news",
     "updateSuccess": "News updated",

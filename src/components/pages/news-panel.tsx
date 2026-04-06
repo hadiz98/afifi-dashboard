@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { toastApiError } from "@/lib/toast-api-error";
@@ -105,7 +105,7 @@ const createNewsSchema = z.object({
 function validateCreate(values: { dateTime: Date | null; imageFile: File | null }) {
   const parsed = createNewsSchema.safeParse({
     dateTime: values.dateTime ?? undefined,
-      imageFile: values.imageFile ?? undefined,
+    imageFile: values.imageFile ?? undefined,
   });
   if (parsed.success) return { ok: true as const };
   const next: CreateFormErrors = {};
@@ -211,6 +211,7 @@ function NewsCardGrid({ row, locale, t }: { row: NewsItem; locale: string; t: Re
 export function NewsPanel() {
   const t = useTranslations("NewsPage");
   const locale = useLocale();
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [rows, setRows] = useState<NewsItem[]>([]);
   const [page, setPage] = useState(1);
@@ -223,7 +224,7 @@ export function NewsPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [createErrors, setCreateErrors] = useState<CreateFormErrors>({});
   const [form, setForm] = useState<NewsFormState>({
-    dateTime: null,
+    dateTime: new Date(),
     isActive: true,
     translations: emptyTranslations(),
     tagsByLocale: { en: "", ar: "" },
@@ -270,10 +271,10 @@ export function NewsPanel() {
       setCreateErrors({
         ...(!localesOk
           ? {
-              title: anyNewsFullContentOverLimit(form.translations)
-                ? t("fullContentMax")
-                : t("translationsAtLeastOneRequired"),
-            }
+            title: anyNewsFullContentOverLimit(form.translations)
+              ? t("fullContentMax")
+              : t("translationsAtLeastOneRequired"),
+          }
           : {}),
         ...(vErrors.date ? { date: `${t("fieldDate")} is required` } : {}),
         ...(vErrors.image ? {
@@ -300,7 +301,7 @@ export function NewsPanel() {
       await createNews(fd);
       toast.success(t("createSuccess"));
       setCreateOpen(false); setCreateErrors({});
-      setForm({ dateTime: null, isActive: true, translations: emptyTranslations(), tagsByLocale: { en: "", ar: "" } });
+      setForm({ dateTime: new Date(), isActive: true, translations: emptyTranslations(), tagsByLocale: { en: "", ar: "" } });
       setImageFile(null);
       await load();
     } catch (e) { toastApiError(e, t("createError")); }
@@ -773,14 +774,19 @@ export function NewsPanel() {
                 </div>
                 <Switch checked={form.isActive} onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))} />
               </div>
-
               {/* Image upload */}
+              {/* add this ref near your other useState calls */}
+
+              {/* ── Image upload ── */}
               <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t("fieldImage")}
                 </Label>
-                <label
-                  htmlFor="news-create-image"
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => imageInputRef.current?.click()}
+                  onKeyDown={(e) => e.key === "Enter" && imageInputRef.current?.click()}
                   className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-border/70 bg-background py-8 text-center transition-colors hover:border-border hover:bg-muted/30"
                 >
                   <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-muted shadow-sm transition-colors group-hover:bg-background">
@@ -800,23 +806,17 @@ export function NewsPanel() {
                   ) : (
                     <div>
                       <p className="text-sm font-medium">{t("clickToUpload")}</p>
-                      <p className="text-xs text-muted-foreground">{t("imageOptionalHint")}</p>
+                      <p className="text-xs text-muted-foreground">{t("imageHint")}</p>
                     </div>
                   )}
-                  <Input
-                    id="news-create-image"
+                  <input
+                    ref={imageInputRef}
                     type="file"
                     accept="image/*"
                     className="sr-only"
-                    onChange={(e) => {
-                      setImageFile(e.target.files?.[0] ?? null);
-                      setCreateErrors((er) => ({ ...er, image: undefined }));
-                    }}
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                   />
-                </label>
-                {createErrors.image && (
-                  <p className="text-xs text-destructive">{createErrors.image}</p>
-                )}
+                </div>
               </div>
             </div>
           </div>

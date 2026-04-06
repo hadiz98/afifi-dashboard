@@ -376,6 +376,8 @@
     "colDescription": "الوصف"
   },
   "NewsPage": {
+        "imageHint": "JPG/PNG/WEBP/GIF حتى 5MB.",
+
     "clickToUpload": "اضغط للرفع",
     "title": "الأخبار",
     "description": "إدارة عناصر الأخبار.",

@@ -123,7 +123,7 @@ export function EventsPanel() {
     translations: TranslationsForm;
   }>({
     slug: "",
-    startsAt: null,
+    startsAt: new Date(),
     endsAt: null,
     isActive: true,
     translations: emptyTranslations(),
@@ -192,7 +192,7 @@ export function EventsPanel() {
       toast.success(t("createSuccess"));
       setCreateOpen(false);
       setImageFile(null);
-      setForm({ slug: "", startsAt: null, endsAt: null, isActive: true, translations: emptyTranslations() });
+      setForm({ slug: "", startsAt: new Date(), endsAt: null, isActive: true, translations: emptyTranslations() });
       await load();
     } catch (e) {
       toastApiError(e, t("createError"));

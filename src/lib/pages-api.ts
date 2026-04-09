@@ -20,7 +20,11 @@ export type PageTranslation = {
 export type PublicPageResponse = {
   key: PageKey;
   coverImage?: string | null;
+  coverImageDesktop?: string | null;
+  coverImageMobile?: string | null;
   coverCrop?: unknown | null;
+  coverCropDesktop?: unknown | null;
+  coverCropMobile?: unknown | null;
   isActive?: boolean;
   titleColor?: PageTitleColor;
   translation: Omit<PageTranslation, "locale">;
@@ -29,7 +33,11 @@ export type PublicPageResponse = {
 export type StaffPage = {
   key: PageKey;
   coverImage?: string | null;
+  coverImageDesktop?: string | null;
+  coverImageMobile?: string | null;
   coverCrop?: unknown | null;
+  coverCropDesktop?: unknown | null;
+  coverCropMobile?: unknown | null;
   isActive?: boolean;
   translations: Array<PageTranslation>;
   createdAt?: string | null;
@@ -149,7 +157,13 @@ function normalizeStaffPage(raw: unknown): StaffPage | null {
   if (!isPageKey(o.key)) return null;
   const coverImageRaw = typeof o.coverImage === "string" ? o.coverImage : o.coverImage == null ? null : null;
   const coverImage = coverImageRaw ? normalizePageCoverImagePath(coverImageRaw) : null;
+  const coverImageDesktopRaw = typeof o.coverImageDesktop === "string" ? o.coverImageDesktop : o.coverImageDesktop == null ? null : null;
+  const coverImageMobileRaw = typeof o.coverImageMobile === "string" ? o.coverImageMobile : o.coverImageMobile == null ? null : null;
+  const coverImageDesktop = coverImageDesktopRaw ? normalizePageCoverImagePath(coverImageDesktopRaw) : coverImage;
+  const coverImageMobile = coverImageMobileRaw ? normalizePageCoverImagePath(coverImageMobileRaw) : null;
   const coverCrop = parseMaybeJson(o.coverCrop);
+  const coverCropDesktop = parseMaybeJson(o.coverCropDesktop) ?? coverCrop;
+  const coverCropMobile = parseMaybeJson(o.coverCropMobile);
   const isActive = parseOptionalBoolean(o.isActive);
   const translationsRaw = translationsArrayFromRaw(o.translations);
   const parsed = translationsRaw
@@ -162,7 +176,19 @@ function normalizeStaffPage(raw: unknown): StaffPage | null {
   const translations = Array.from(byLocale.values());
   const createdAt = typeof o.createdAt === "string" ? o.createdAt : null;
   const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt : null;
-  return { key: o.key, coverImage, coverCrop, isActive, translations, createdAt, updatedAt };
+  return {
+    key: o.key,
+    coverImage,
+    coverImageDesktop,
+    coverImageMobile,
+    coverCrop,
+    coverCropDesktop,
+    coverCropMobile,
+    isActive,
+    translations,
+    createdAt,
+    updatedAt,
+  };
 }
 
 function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | null {
@@ -170,7 +196,13 @@ function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | n
   const o = raw as Record<string, unknown>;
   const coverImageRaw = typeof o.coverImage === "string" ? o.coverImage : o.coverImage == null ? null : null;
   const coverImage = coverImageRaw ? normalizePageCoverImagePath(coverImageRaw) : null;
+  const coverImageDesktopRaw = typeof o.coverImageDesktop === "string" ? o.coverImageDesktop : o.coverImageDesktop == null ? null : null;
+  const coverImageMobileRaw = typeof o.coverImageMobile === "string" ? o.coverImageMobile : o.coverImageMobile == null ? null : null;
+  const coverImageDesktop = coverImageDesktopRaw ? normalizePageCoverImagePath(coverImageDesktopRaw) : coverImage;
+  const coverImageMobile = coverImageMobileRaw ? normalizePageCoverImagePath(coverImageMobileRaw) : null;
   const coverCrop = parseMaybeJson(o.coverCrop);
+  const coverCropDesktop = parseMaybeJson(o.coverCropDesktop) ?? coverCrop;
+  const coverCropMobile = parseMaybeJson(o.coverCropMobile);
   const isActive = typeof o.isActive === "boolean" ? o.isActive : undefined;
   const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
   const trRaw = o.translation;
@@ -193,7 +225,11 @@ function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | n
   return {
     key,
     coverImage,
+    coverImageDesktop,
+    coverImageMobile,
     coverCrop,
+    coverCropDesktop,
+    coverCropMobile,
     isActive,
     titleColor,
     translation: { title, text, subtitle, metaDescription, metaKeywords },
@@ -242,12 +278,16 @@ export async function upsertPage(params: {
   key: PageKey;
   isActive?: boolean;
   coverCropJson?: string;
+  coverCropDesktopJson?: string;
+  coverCropMobileJson?: string;
   translationsJson?: string;
   coverFile?: File | null;
 }): Promise<StaffPage> {
   const fd = new FormData();
   if (typeof params.isActive === "boolean") fd.append("isActive", params.isActive ? "1" : "0");
   if (typeof params.coverCropJson === "string") fd.append("coverCrop", params.coverCropJson);
+  if (typeof params.coverCropDesktopJson === "string") fd.append("coverCropDesktop", params.coverCropDesktopJson);
+  if (typeof params.coverCropMobileJson === "string") fd.append("coverCropMobile", params.coverCropMobileJson);
   if (typeof params.translationsJson === "string") fd.append("translations", params.translationsJson);
   if (params.coverFile) fd.append("coverImage", params.coverFile);
   const res = await apiFetch(`/api/pages/${encodeURIComponent(params.key)}`, { method: "PUT", body: fd });

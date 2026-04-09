@@ -85,9 +85,26 @@ const KEY_TO_ICON: Record<PageKey, React.ElementType> = {
 
 const COVER_MAX_BYTES = 10 * 1024 * 1024;
 const COVER_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
-const COVER_ASPECT = 16 / 9;
-const COVER_TARGET_W = 1920;
-const COVER_TARGET_H = 1080;
+type CropPreset = {
+  desktop: { aspect: number; targetW: number; targetH: number };
+  mobile: { aspect: number; targetW: number; targetH: number };
+};
+
+const HOME_CROP_PRESET: CropPreset = {
+  desktop: { aspect: 16 / 9, targetW: 1920, targetH: 1080 },
+  mobile: { aspect: 9 / 16, targetW: 1080, targetH: 1920 },
+};
+
+const INNER_PAGE_CROP_PRESET: CropPreset = {
+  // Other pages use shorter strip-like hero sections.
+  desktop: { aspect: 3 / 1, targetW: 2100, targetH: 700 },
+  mobile: { aspect: 4 / 5, targetW: 1080, targetH: 1350 },
+};
+
+function cropPresetForKey(key: PageKey | null): CropPreset {
+  if (key === "home") return HOME_CROP_PRESET;
+  return INNER_PAGE_CROP_PRESET;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -506,11 +523,16 @@ export function PagesPanel() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
-  const [coverCropXY, setCoverCropXY] = useState({ x: 0, y: 0 });
-  const [coverZoom, setCoverZoom] = useState(1);
-  const [coverCroppedAreaPercent, setCoverCroppedAreaPercent] = useState<Area | null>(null);
-  /** Current server cover URL for this key (shown until user picks a replacement file). */
-  const [editCoverImageUrl, setEditCoverImageUrl] = useState<string | null>(null);
+  const [coverCropDesktopXY, setCoverCropDesktopXY] = useState({ x: 0, y: 0 });
+  const [coverCropMobileXY, setCoverCropMobileXY] = useState({ x: 0, y: 0 });
+  const [coverDesktopZoom, setCoverDesktopZoom] = useState(1);
+  const [coverMobileZoom, setCoverMobileZoom] = useState(1);
+  const [coverDesktopAreaPercent, setCoverDesktopAreaPercent] = useState<Area | null>(null);
+  const [coverMobileAreaPercent, setCoverMobileAreaPercent] = useState<Area | null>(null);
+  const [cropPreset, setCropPreset] = useState<CropPreset>(HOME_CROP_PRESET);
+  /** Current server cover URLs for this key (shown until user picks a replacement file). */
+  const [editCoverImageDesktopUrl, setEditCoverImageDesktopUrl] = useState<string | null>(null);
+  const [editCoverImageMobileUrl, setEditCoverImageMobileUrl] = useState<string | null>(null);
 
   // ── Counts ──
   const missingCount = useMemo(
@@ -547,12 +569,14 @@ export function PagesPanel() {
     if (editCoverFile) {
       if (editCoverFile.size > COVER_MAX_BYTES) return true;
       if (!isAllowedCover(editCoverFile)) return true;
+      if (!coverDesktopAreaPercent || !coverMobileAreaPercent) return true;
     }
     return false;
-  }, [editCoverFile, editForm, editLoading, submitting]);
+  }, [coverDesktopAreaPercent, coverMobileAreaPercent, editCoverFile, editForm, editLoading, submitting]);
 
   // ── Open edit ──
   async function openEdit(key: PageKey) {
+    setCropPreset(cropPresetForKey(key));
     const existing = rows.find((r) => r.key === key);
     setEditKey(key);
     setEditCoverFile(null);
@@ -560,22 +584,28 @@ export function PagesPanel() {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
-    setCoverCropXY({ x: 0, y: 0 });
-    setCoverZoom(1);
-    setCoverCroppedAreaPercent(null);
+    setCoverCropDesktopXY({ x: 0, y: 0 });
+    setCoverCropMobileXY({ x: 0, y: 0 });
+    setCoverDesktopZoom(1);
+    setCoverMobileZoom(1);
+    setCoverDesktopAreaPercent(null);
+    setCoverMobileAreaPercent(null);
     setEditForm(formFromPage(existing ?? null));
     setEditLocaleTab(locale === "ar" ? "ar" : "en");
-    setEditCoverImageUrl(existing?.coverImage ?? null);
+    setEditCoverImageDesktopUrl(existing?.coverImageDesktop ?? existing?.coverImage ?? null);
+    setEditCoverImageMobileUrl(existing?.coverImageMobile ?? null);
     setEditLoading(true);
     setEditOpen(true);
     try {
       const item = await fetchPageByKey(key);
       setEditForm(formFromPage(item));
-      setEditCoverImageUrl(item.coverImage ?? null);
+      setEditCoverImageDesktopUrl(item.coverImageDesktop ?? item.coverImage ?? null);
+      setEditCoverImageMobileUrl(item.coverImageMobile ?? null);
     } catch {
       if (!existing) {
         setEditForm(formFromPage(null));
-        setEditCoverImageUrl(null);
+        setEditCoverImageDesktopUrl(null);
+        setEditCoverImageMobileUrl(null);
       }
     } finally {
       setEditLoading(false);
@@ -592,18 +622,32 @@ export function PagesPanel() {
       toast.error(t("invalidTranslations"));
       return;
     }
-    let cropJson: string | undefined;
-    if (editCoverFile && coverCroppedAreaPercent) {
-      const p = coverCroppedAreaPercent;
-      cropJson = JSON.stringify({
+    let cropDesktopJson: string | undefined;
+    let cropMobileJson: string | undefined;
+    if (editCoverFile && coverDesktopAreaPercent && coverMobileAreaPercent) {
+      const desktop = coverDesktopAreaPercent;
+      const mobile = coverMobileAreaPercent;
+      cropDesktopJson = JSON.stringify({
         presets: [{
-          key: "cover",
-          targetW: COVER_TARGET_W,
-          targetH: COVER_TARGET_H,
-          x: +p.x.toFixed(4),
-          y: +p.y.toFixed(4),
-          w: +p.width.toFixed(4),
-          h: +p.height.toFixed(4),
+          key: "coverDesktop",
+          targetW: cropPreset.desktop.targetW,
+          targetH: cropPreset.desktop.targetH,
+          x: +desktop.x.toFixed(4),
+          y: +desktop.y.toFixed(4),
+          w: +desktop.width.toFixed(4),
+          h: +desktop.height.toFixed(4),
+          unit: "percent",
+        }],
+      });
+      cropMobileJson = JSON.stringify({
+        presets: [{
+          key: "coverMobile",
+          targetW: cropPreset.mobile.targetW,
+          targetH: cropPreset.mobile.targetH,
+          x: +mobile.x.toFixed(4),
+          y: +mobile.y.toFixed(4),
+          w: +mobile.width.toFixed(4),
+          h: +mobile.height.toFixed(4),
           unit: "percent",
         }],
       });
@@ -617,7 +661,9 @@ export function PagesPanel() {
       const saved = await upsertPage({
         key,
         isActive: editForm.isActive,
-        coverCropJson: cropJson,
+        coverCropJson: cropDesktopJson,
+        coverCropDesktopJson: cropDesktopJson,
+        coverCropMobileJson: cropMobileJson,
         translationsJson: buildTranslationsJson(editForm),
         coverFile: editCoverFile ?? undefined,
       });
@@ -634,12 +680,13 @@ export function PagesPanel() {
 
   async function onRemoveCover() {
     const key = editKey;
-    if (!key || !editCoverImageUrl || editCoverFile) return;
+    if (!key || (!editCoverImageDesktopUrl && !editCoverImageMobileUrl) || editCoverFile) return;
     setRemovingCover(true);
     try {
       const page = await deletePageCover(key);
       setRows((prev) => prev.map((p) => (p.key === key ? page : p)));
-      setEditCoverImageUrl(page.coverImage ?? null);
+      setEditCoverImageDesktopUrl(page.coverImageDesktop ?? page.coverImage ?? null);
+      setEditCoverImageMobileUrl(page.coverImageMobile ?? null);
       setEditForm((s) => ({
         ...s,
         coverCrop:
@@ -663,14 +710,19 @@ export function PagesPanel() {
     setEditKey(null);
     setRemovingCover(false);
     setEditCoverFile(null);
-    setEditCoverImageUrl(null);
+    setEditCoverImageDesktopUrl(null);
+    setEditCoverImageMobileUrl(null);
     setCoverPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
-    setCoverCropXY({ x: 0, y: 0 });
-    setCoverZoom(1);
-    setCoverCroppedAreaPercent(null);
+    setCoverCropDesktopXY({ x: 0, y: 0 });
+    setCoverCropMobileXY({ x: 0, y: 0 });
+    setCoverDesktopZoom(1);
+    setCoverMobileZoom(1);
+    setCoverDesktopAreaPercent(null);
+    setCoverMobileAreaPercent(null);
+    setCropPreset(HOME_CROP_PRESET);
     setEditForm(formFromPage(null));
   }
 
@@ -811,14 +863,33 @@ export function PagesPanel() {
                   <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {t("coverImage")}
                   </Label>
-                  {editCoverImageUrl && !editCoverFile ? (
+                  {(editCoverImageDesktopUrl || editCoverImageMobileUrl) && !editCoverFile ? (
                     <div className="grid gap-2">
-                      <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
-                        <img
-                          src={editCoverImageUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="grid gap-1.5">
+                          <span className="text-[11px] text-muted-foreground font-medium">Desktop banner</span>
+                          <div
+                            className="relative w-full overflow-hidden rounded-xl border border-border/60 bg-muted"
+                            style={{ aspectRatio: `${cropPreset.desktop.targetW} / ${cropPreset.desktop.targetH}` }}
+                          >
+                            {editCoverImageDesktopUrl ? (
+                              <img src={editCoverImageDesktopUrl} alt="" className="h-full w-full object-cover" />
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="grid gap-1.5">
+                          <span className="text-[11px] text-muted-foreground font-medium">Mobile banner</span>
+                          <div
+                            className="relative max-h-[280px] w-full overflow-hidden rounded-xl border border-border/60 bg-muted"
+                            style={{ aspectRatio: `${cropPreset.mobile.targetW} / ${cropPreset.mobile.targetH}` }}
+                          >
+                            {editCoverImageMobileUrl ? (
+                              <img src={editCoverImageMobileUrl} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">Fallback to desktop</div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <Button
                         type="button"
@@ -850,9 +921,12 @@ export function PagesPanel() {
                         return file ? URL.createObjectURL(file) : null;
                       });
                       if (file) {
-                        setCoverCropXY({ x: 0, y: 0 });
-                        setCoverZoom(1);
-                        setCoverCroppedAreaPercent(null);
+                        setCoverCropDesktopXY({ x: 0, y: 0 });
+                        setCoverCropMobileXY({ x: 0, y: 0 });
+                        setCoverDesktopZoom(1);
+                        setCoverMobileZoom(1);
+                        setCoverDesktopAreaPercent(null);
+                        setCoverMobileAreaPercent(null);
                       }
                     }}
                   />
@@ -869,39 +943,84 @@ export function PagesPanel() {
                   </button>
                 </div>
 
-                {/* Crop */}
+                {/* Crops */}
                 {coverPreviewUrl && (
-                  <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-                    <div className="flex items-center justify-between gap-2">
+                  <div className="grid gap-4 rounded-xl border border-border/60 bg-muted/20 p-4">
+                    <div className="grid gap-1">
                       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t("coverCrop")}
+                        {t("coverCrop")} (Desktop + Mobile)
                       </Label>
-                      <span className="text-[11px] text-muted-foreground">{t("coverCropHint")}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Crop desktop at 16:9 and mobile at 9:16 for each upload.
+                      </span>
                     </div>
-                    <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-border/60 bg-muted">
-                      <Cropper
-                        image={coverPreviewUrl}
-                        crop={coverCropXY}
-                        zoom={coverZoom}
-                        aspect={COVER_ASPECT}
-                        onCropChange={setCoverCropXY}
-                        onZoomChange={setCoverZoom}
-                        onCropComplete={(_, a) => setCoverCroppedAreaPercent(a)}
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t("zoom")} — {coverZoom.toFixed(2)}×
-                      </Label>
-                      <input
-                        type="range"
-                        min={1}
-                        max={3}
-                        step={0.01}
-                        value={coverZoom}
-                        className="accent-primary"
-                        onChange={(e) => setCoverZoom(Number(e.target.value))}
-                      />
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Desktop ({cropPreset.desktop.targetW}:{cropPreset.desktop.targetH})
+                        </Label>
+                        <div
+                          className="relative w-full overflow-hidden rounded-xl border border-border/60 bg-muted"
+                          style={{ aspectRatio: `${cropPreset.desktop.targetW} / ${cropPreset.desktop.targetH}` }}
+                        >
+                          <Cropper
+                            image={coverPreviewUrl}
+                            crop={coverCropDesktopXY}
+                            zoom={coverDesktopZoom}
+                            aspect={cropPreset.desktop.aspect}
+                            onCropChange={setCoverCropDesktopXY}
+                            onZoomChange={setCoverDesktopZoom}
+                            onCropComplete={(areaPercent) => setCoverDesktopAreaPercent(areaPercent)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t("zoom")} — {coverDesktopZoom.toFixed(2)}×
+                          </Label>
+                          <input
+                            type="range"
+                            min={1}
+                            max={3}
+                            step={0.01}
+                            value={coverDesktopZoom}
+                            className="accent-primary"
+                            onChange={(e) => setCoverDesktopZoom(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Mobile ({cropPreset.mobile.targetW}:{cropPreset.mobile.targetH})
+                        </Label>
+                        <div
+                          className="relative max-h-[360px] w-full overflow-hidden rounded-xl border border-border/60 bg-muted"
+                          style={{ aspectRatio: `${cropPreset.mobile.targetW} / ${cropPreset.mobile.targetH}` }}
+                        >
+                          <Cropper
+                            image={coverPreviewUrl}
+                            crop={coverCropMobileXY}
+                            zoom={coverMobileZoom}
+                            aspect={cropPreset.mobile.aspect}
+                            onCropChange={setCoverCropMobileXY}
+                            onZoomChange={setCoverMobileZoom}
+                            onCropComplete={(areaPercent) => setCoverMobileAreaPercent(areaPercent)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t("zoom")} — {coverMobileZoom.toFixed(2)}×
+                          </Label>
+                          <input
+                            type="range"
+                            min={1}
+                            max={3}
+                            step={0.01}
+                            value={coverMobileZoom}
+                            className="accent-primary"
+                            onChange={(e) => setCoverMobileZoom(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -52,6 +52,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { NewsDateTimePicker } from "@/components/news-date-time-picker";
 import { cn } from "@/lib/utils";
@@ -113,6 +114,7 @@ export function EventsPanel() {
   const [createOpen, setCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [createLocaleTab, setCreateLocaleTab] = useState<EventLocale>(locale === "ar" ? "ar" : "en");
   const [imageFile, setImageFile] = useState<File | null>(null);
 
   const [form, setForm] = useState<{
@@ -162,6 +164,13 @@ export function EventsPanel() {
 
   async function onCreate() {
     setCreateError(null);
+    const firstIncompleteLocale = (["en", "ar"] as const).find((loc) => {
+      const tr = form.translations[loc];
+      return !tr.title.trim() || !tr.subtitle.trim() || !tr.fullContent.trim();
+    });
+    const overLimitLocale = (["en", "ar"] as const).find(
+      (loc) => form.translations[loc].fullContent.length > 50000
+    );
     const parsed = createSchema.safeParse({
       slug: form.slug,
       startsAt: form.startsAt ?? undefined,
@@ -172,6 +181,8 @@ export function EventsPanel() {
       !hasBothEventLocalesComplete(form.translations) ||
       anyEventFullContentOverLimit(form.translations)
     ) {
+      if (overLimitLocale) setCreateLocaleTab(overLimitLocale);
+      else if (firstIncompleteLocale) setCreateLocaleTab(firstIncompleteLocale);
       setCreateError(t("createInvalid"));
       return;
     }
@@ -193,6 +204,7 @@ export function EventsPanel() {
       setCreateOpen(false);
       setImageFile(null);
       setForm({ slug: "", startsAt: new Date(), endsAt: null, isActive: true, translations: emptyTranslations() });
+      setCreateLocaleTab(locale === "ar" ? "ar" : "en");
       await load();
     } catch (e) {
       toastApiError(e, t("createError"));
@@ -495,11 +507,16 @@ export function EventsPanel() {
                   </p>
                   <Badge variant="secondary" className="text-xs">{t("required")}</Badge>
                 </div>
-                {(["en", "ar"] as const).map((loc) => {
-                  const dir = loc === "ar" ? "rtl" : "ltr";
-                  const v = form.translations[loc];
-                  return (
-                    <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
+                <Tabs value={createLocaleTab} onValueChange={(v) => setCreateLocaleTab(v === "ar" ? "ar" : "en")}>
+                  <TabsList>
+                    <TabsTrigger value="en">{t("langEn")}</TabsTrigger>
+                    <TabsTrigger value="ar">{t("langAr")}</TabsTrigger>
+                  </TabsList>
+                  {(["en", "ar"] as const).map((loc) => {
+                    const dir = loc === "ar" ? "rtl" : "ltr";
+                    const v = form.translations[loc];
+                    return (
+                    <TabsContent key={loc} value={loc} className="rounded-xl border border-border/60 bg-background p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-sm font-semibold">
                           {loc === "en" ? t("langEn") : t("langAr")}
@@ -617,9 +634,10 @@ export function EventsPanel() {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </TabsContent>
                   );
                 })}
+                </Tabs>
               </div>
             </div>
           </div>

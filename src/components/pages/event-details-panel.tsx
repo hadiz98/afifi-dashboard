@@ -58,6 +58,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { NewsDateTimePicker } from "@/components/news-date-time-picker";
 import { cn } from "@/lib/utils";
@@ -197,6 +198,7 @@ export function EventDetailsPanel({ id }: { id: string }) {
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editLocaleTab, setEditLocaleTab] = useState<EventLocale>(locale === "ar" ? "ar" : "en");
 
   const [form, setForm] = useState<{
     slug: string;
@@ -249,6 +251,13 @@ export function EventDetailsPanel({ id }: { id: string }) {
 
   async function onSave() {
     setFormError(null);
+    const firstIncompleteLocale = (["en", "ar"] as const).find((loc) => {
+      const tr = form.translations[loc];
+      return !tr.title.trim() || !tr.subtitle.trim() || !tr.fullContent.trim();
+    });
+    const overLimitLocale = (["en", "ar"] as const).find(
+      (loc) => form.translations[loc].fullContent.length > 50000
+    );
     const ok = editSchema.safeParse({
       slug: form.slug,
       startsAt: form.startsAt ?? undefined,
@@ -260,6 +269,8 @@ export function EventDetailsPanel({ id }: { id: string }) {
       !hasBothEventLocalesComplete(form.translations) ||
       anyEventFullContentOverLimit(form.translations)
     ) {
+      if (overLimitLocale) setEditLocaleTab(overLimitLocale);
+      else if (firstIncompleteLocale) setEditLocaleTab(firstIncompleteLocale);
       setFormError(t("invalid")); return;
     }
     if (form.endsAt && form.startsAt && form.endsAt < form.startsAt) {
@@ -733,11 +744,16 @@ export function EventDetailsPanel({ id }: { id: string }) {
                   </p>
                   <Badge variant="secondary" className="text-xs">{t("required")}</Badge>
                 </div>
+                <Tabs value={editLocaleTab} onValueChange={(v) => setEditLocaleTab(v === "ar" ? "ar" : "en")}>
+                  <TabsList>
+                    <TabsTrigger value="en">{t("langEn")}</TabsTrigger>
+                    <TabsTrigger value="ar">{t("langAr")}</TabsTrigger>
+                  </TabsList>
                 {(["en", "ar"] as const).map((loc) => {
                   const dir = loc === "ar" ? "rtl" : "ltr";
                   const v = form.translations[loc];
                   return (
-                    <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
+                    <TabsContent key={loc} value={loc} className="rounded-xl border border-border/60 bg-background p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-sm font-semibold">
                           {loc === "en" ? t("langEn") : t("langAr")}
@@ -855,9 +871,10 @@ export function EventDetailsPanel({ id }: { id: string }) {
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </TabsContent>
                   );
                 })}
+                </Tabs>
               </div>
             </div>
           </div>

@@ -49,12 +49,14 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PAGE_KEYS: readonly PageKey[] = [
   "home",
   "farm",
+  "about",
   "news",
   "events",
   "horses",
@@ -64,6 +66,7 @@ const PAGE_KEYS: readonly PageKey[] = [
 const KEY_TO_PATH: Record<PageKey, string> = {
   home: "/",
   farm: "/farm",
+  about: "/about",
   news: "/news",
   events: "/events",
   horses: "/horses",
@@ -73,6 +76,7 @@ const KEY_TO_PATH: Record<PageKey, string> = {
 const KEY_TO_ICON: Record<PageKey, React.ElementType> = {
   home: Layers,
   farm: Globe,
+  about: Globe,
   news: FileText,
   events: FileText,
   horses: Globe,
@@ -96,8 +100,8 @@ function isAllowedCover(file: File): boolean {
 function isMissingPage(page: StaffPage): boolean {
   const en = page.translations.find((t) => t.locale === "en");
   const ar = page.translations.find((t) => t.locale === "ar");
-  const enOk = (en?.title ?? "").trim().length > 0 && (en?.text ?? "").trim().length > 0;
-  const arOk = (ar?.title ?? "").trim().length > 0 && (ar?.text ?? "").trim().length > 0;
+  const enOk = (en?.title ?? "").trim().length > 0;
+  const arOk = (ar?.title ?? "").trim().length > 0;
   return !enOk || !arOk;
 }
 
@@ -185,7 +189,7 @@ function buildTranslationsJson(form: PageEditForm): string {
 }
 
 function hasRequiredTr(form: TranslationForm): boolean {
-  return form.title.trim().length > 0 && form.text.trim().length > 0;
+  return form.title.trim().length > 0;
 }
 
 // ─── Locale Tab Input ─────────────────────────────────────────────────────────
@@ -436,7 +440,7 @@ function TranslationColumn({
           />
         </LocaleTabField>
 
-        <LocaleTabField label={t("textField")} required>
+        <LocaleTabField label={t("textField")}>
           <Textarea
             value={value.text}
             dir={dir}
@@ -497,6 +501,7 @@ export function PagesPanel() {
   const [editKey, setEditKey] = useState<PageKey | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState<PageEditForm>(() => formFromPage(null));
+  const [editLocaleTab, setEditLocaleTab] = useState<PageLocaleTab>(locale === "ar" ? "ar" : "en");
 
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
@@ -559,6 +564,7 @@ export function PagesPanel() {
     setCoverZoom(1);
     setCoverCroppedAreaPercent(null);
     setEditForm(formFromPage(existing ?? null));
+    setEditLocaleTab(locale === "ar" ? "ar" : "en");
     setEditCoverImageUrl(existing?.coverImage ?? null);
     setEditLoading(true);
     setEditOpen(true);
@@ -581,6 +587,8 @@ export function PagesPanel() {
     const key = editKey;
     if (!key) return;
     if (!hasRequiredTr(editForm.en) || !hasRequiredTr(editForm.ar)) {
+      if (!hasRequiredTr(editForm.en)) setEditLocaleTab("en");
+      else if (!hasRequiredTr(editForm.ar)) setEditLocaleTab("ar");
       toast.error(t("invalidTranslations"));
       return;
     }
@@ -750,7 +758,7 @@ export function PagesPanel() {
                 <Globe className="size-3.5 text-muted-foreground" />
               </div>
               <span>
-                {t("editTitle", { key: editKey ? t(`key.${editKey}` as any) : "" })}
+                {t("editTitle", { key: editKey ? t(`key.${editKey}` as never) : "" })}
               </span>
               {editKey && (
                 <span className="rounded-md border border-border/60 bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
@@ -908,20 +916,28 @@ export function PagesPanel() {
                       {t("translationsHint")}
                     </span>
                   </div>
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <TranslationColumn
-                      locale="en"
-                      value={editForm.en}
-                      onChange={(next) => setEditForm((s) => ({ ...s, en: next }))}
-                      t={t}
-                    />
-                    <TranslationColumn
-                      locale="ar"
-                      value={editForm.ar}
-                      onChange={(next) => setEditForm((s) => ({ ...s, ar: next }))}
-                      t={t}
-                    />
-                  </div>
+                  <Tabs value={editLocaleTab} onValueChange={(v) => setEditLocaleTab(v === "ar" ? "ar" : "en")}>
+                    <TabsList>
+                      <TabsTrigger value="en">{t("langEn")}</TabsTrigger>
+                      <TabsTrigger value="ar">{t("langAr")}</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="en">
+                      <TranslationColumn
+                        locale="en"
+                        value={editForm.en}
+                        onChange={(next) => setEditForm((s) => ({ ...s, en: next }))}
+                        t={t}
+                      />
+                    </TabsContent>
+                    <TabsContent value="ar">
+                      <TranslationColumn
+                        locale="ar"
+                        value={editForm.ar}
+                        onChange={(next) => setEditForm((s) => ({ ...s, ar: next }))}
+                        t={t}
+                      />
+                    </TabsContent>
+                  </Tabs>
                 </div>
 
               </div>

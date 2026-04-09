@@ -50,6 +50,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 function Section({
@@ -164,6 +165,7 @@ export function NewsDetailsPanel({ id }: { id: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editLocaleTab, setEditLocaleTab] = useState<Locale>(locale === "ar" ? "ar" : "en");
 
   const [form, setForm] = useState<{
     dateTime: Date | null;
@@ -240,6 +242,14 @@ export function NewsDetailsPanel({ id }: { id: string }) {
 
   async function onSave() {
     setFormError(null);
+    const firstIncompleteLocale = (["en", "ar"] as const).find((loc) => {
+      const tr = form.translations[loc];
+      const hasCore = tr.title.trim().length > 0 && tr.fullContent.trim().length > 0;
+      return !hasCore;
+    });
+    const overLimitLocale = (["en", "ar"] as const).find(
+      (loc) => form.translations[loc].fullContent.length > 50000
+    );
     const tagsBy = { en: form.translations.en.tags, ar: form.translations.ar.tags };
     const core: Record<Locale, NewsLocaleFormRow> = {
       en: {
@@ -264,15 +274,18 @@ export function NewsDetailsPanel({ id }: { id: string }) {
       },
       tagsBy
     )) {
+      setEditLocaleTab(firstIncompleteLocale ?? (locale === "ar" ? "ar" : "en"));
       setFormError(tCommon("translationsAtLeastOneRequired"));
       return;
     }
     if (anyNewsFullContentOverLimit(core)) {
+      setEditLocaleTab(overLimitLocale ?? (locale === "ar" ? "ar" : "en"));
       setFormError(tCommon("fullContentMax"));
       return;
     }
     const payload = buildNewsTranslationsPayload(core, tagsBy);
     if (Object.keys(payload).length === 0) {
+      setEditLocaleTab(firstIncompleteLocale ?? (locale === "ar" ? "ar" : "en"));
       setFormError(tCommon("translationsAtLeastOneRequired"));
       return;
     }
@@ -768,12 +781,18 @@ export function NewsDetailsPanel({ id }: { id: string }) {
                     {tCommon("required")}
                   </Badge>
                 </div>
-                {(["en", "ar"] as const).map((loc) => {
-                  const dir = loc === "ar" ? "rtl" : "ltr";
-                  const v = form.translations[loc];
-                  return (
-                    <div
+                <Tabs value={editLocaleTab} onValueChange={(v) => setEditLocaleTab(v === "ar" ? "ar" : "en")}>
+                  <TabsList>
+                    <TabsTrigger value="en">{tCommon("langEn")}</TabsTrigger>
+                    <TabsTrigger value="ar">{tCommon("langAr")}</TabsTrigger>
+                  </TabsList>
+                  {(["en", "ar"] as const).map((loc) => {
+                    const v = form.translations[loc];
+                    return (
+                    <TabsContent
+                      keepMounted
                       key={loc}
+                      value={loc}
                       className="rounded-xl border border-border/60 bg-background p-4"
                     >
                       <div className="mb-3 flex items-center justify-between">
@@ -912,9 +931,10 @@ export function NewsDetailsPanel({ id }: { id: string }) {
                           />
                         </div>
                       </div>
-                    </div>
+                    </TabsContent>
                   );
                 })}
+                </Tabs>
               </div>
             </div>
           </div>

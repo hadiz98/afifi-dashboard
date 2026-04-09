@@ -19,12 +19,12 @@ export function parseCommaTags(input: string): string[] {
 
 export function isNewsLocaleComplete(
   row: Pick<NewsLocaleFormRow, "title" | "fullContent">,
-  tagsComma: string
+  _tagsComma: string
 ): boolean {
+  void _tagsComma;
   return (
     row.title.trim().length > 0 &&
-    row.fullContent.trim().length > 0 &&
-    parseCommaTags(tagsComma).length > 0
+    row.fullContent.trim().length > 0
   );
 }
 

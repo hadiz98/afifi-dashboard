@@ -76,7 +76,6 @@ function HtmlSyncPlugin({
 }) {
   const [editor] = useLexicalComposerContext();
   const skipNextExternalSync = useRef(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (skipNextExternalSync.current) {
@@ -94,21 +93,11 @@ function HtmlSyncPlugin({
     onHtmlChange(trimmed.length ? html : "");
   }, [editor, onHtmlChange]);
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
   return (
     <OnChangePlugin
       ignoreSelectionChange
       onChange={() => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-          debounceRef.current = null;
-          flushChange();
-        }, 150);
+        flushChange();
       }}
     />
   );

@@ -475,9 +475,8 @@ export function HorseDetailsPanel({ id }: { id: string }) {
   const [pedigreeEditOpen, setPedigreeEditOpen] = useState(false);
   const [pedigreeEdit, setPedigreeEdit] = useState<HorsePedigree>({});
 
-  const [translationEnOpen, setTranslationEnOpen] = useState(false);
+  const [translationEditOpen, setTranslationEditOpen] = useState(false);
   const [translationEnForm, setTranslationEnForm] = useState<TranslationLocaleFields | null>(null);
-  const [translationArOpen, setTranslationArOpen] = useState(false);
   const [translationArForm, setTranslationArForm] = useState<TranslationLocaleFields | null>(null);
   const [translationTab, setTranslationTab] = useState<HorseLocale>(
     locale === "ar" ? "ar" : "en"
@@ -777,6 +776,8 @@ export function HorseDetailsPanel({ id }: { id: string }) {
     submitting || !translationEnForm || !hasLocaleRequired(translationEnForm);
   const translationArSaveDisabled =
     submitting || !translationArForm || !hasLocaleRequired(translationArForm);
+  const activeTranslationSaveDisabled =
+    translationTab === "en" ? translationEnSaveDisabled : translationArSaveDisabled;
 
   async function onSaveProfile() {
     if (!profileForm) return;
@@ -806,7 +807,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
     const ok = await persistHorseUpdate({
       translationPatch: { locale: "en", fields: translationEnForm },
     });
-    if (ok) setTranslationEnOpen(false);
+    if (ok) setTranslationEditOpen(false);
   }
 
   async function onSaveTranslationAr() {
@@ -814,7 +815,14 @@ export function HorseDetailsPanel({ id }: { id: string }) {
     const ok = await persistHorseUpdate({
       translationPatch: { locale: "ar", fields: translationArForm },
     });
-    if (ok) setTranslationArOpen(false);
+    if (ok) setTranslationEditOpen(false);
+  }
+  async function onSaveActiveTranslation() {
+    if (translationTab === "en") {
+      await onSaveTranslationEn();
+    } else {
+      await onSaveTranslationAr();
+    }
   }
 
   async function onDelete() {
@@ -1210,13 +1218,9 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                 disabled={submitting}
                 onClick={() => {
                   const full = translationsFromItem(item);
-                  if (translationTab === "en") {
-                    setTranslationEnForm({ ...full.en });
-                    setTranslationEnOpen(true);
-                  } else {
-                    setTranslationArForm({ ...full.ar });
-                    setTranslationArOpen(true);
-                  }
+                  setTranslationEnForm({ ...full.en });
+                  setTranslationArForm({ ...full.ar });
+                  setTranslationEditOpen(true);
                 }}
               >
                 <Pencil className="size-3" />
@@ -1553,13 +1557,19 @@ export function HorseDetailsPanel({ id }: { id: string }) {
         </DialogContent>
       </Dialog>
 
-      {/* Edit English translation */}
+      {/* Edit translation */}
       <Dialog
-        open={translationEnOpen}
+        open={translationEditOpen}
         onOpenChange={(open) => {
-          setTranslationEnOpen(open);
-          if (!open) setTranslationEnForm(null);
-          else if (item) setTranslationEnForm({ ...translationsFromItem(item).en });
+          setTranslationEditOpen(open);
+          if (!open) {
+            setTranslationEnForm(null);
+            setTranslationArForm(null);
+          } else if (item) {
+            const all = translationsFromItem(item);
+            setTranslationEnForm({ ...all.en });
+            setTranslationArForm({ ...all.ar });
+          }
         }}
       >
         <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[640px]">
@@ -1568,78 +1578,48 @@ export function HorseDetailsPanel({ id }: { id: string }) {
               <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
                 <Globe className="size-3.5 text-muted-foreground" />
               </div>
-              {t("dialogEditTranslationTitle", { locale: t("langEn") })}
+              {t("dialogEditTranslationTitle", { locale: translationTab === "en" ? t("langEn") : t("langAr") })}
             </DialogTitle>
             <DialogDescription className="text-xs">{t("dialogEditTranslationDescription")}</DialogDescription>
           </DialogHeader>
           <Separator />
-          <div className="min-h-0 flex-1 overflow-y-auto py-2 pr-1">
-            {translationEnForm ? (
-              <TranslationFieldsEditor
-                dir="ltr"
-                value={translationEnForm}
-                onField={(key, v) => setTranslationEnForm((s) => (s ? { ...s, [key]: v } : s))}
-                t={t}
-              />
-            ) : null}
-          </div>
+          <Tabs value={translationTab} onValueChange={(v) => setTranslationTab(v === "ar" ? "ar" : "en")}>
+            <TabsList>
+              <TabsTrigger value="en">{t("langEn")}</TabsTrigger>
+              <TabsTrigger value="ar">{t("langAr")}</TabsTrigger>
+            </TabsList>
+            <div className="min-h-0 flex-1 overflow-y-auto py-2 pr-1">
+              <TabsContent value="en">
+                {translationEnForm ? (
+                  <TranslationFieldsEditor
+                    dir="ltr"
+                    value={translationEnForm}
+                    onField={(key, v) => setTranslationEnForm((s) => (s ? { ...s, [key]: v } : s))}
+                    t={t}
+                  />
+                ) : null}
+              </TabsContent>
+              <TabsContent value="ar">
+                {translationArForm ? (
+                  <TranslationFieldsEditor
+                    dir="rtl"
+                    value={translationArForm}
+                    onField={(key, v) => setTranslationArForm((s) => (s ? { ...s, [key]: v } : s))}
+                    t={t}
+                  />
+                ) : null}
+              </TabsContent>
+            </div>
+          </Tabs>
           <Separator />
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => setTranslationEnOpen(false)}>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setTranslationEditOpen(false)}>
               {t("cancel")}
             </Button>
             <Button
               type="button"
-              disabled={translationEnSaveDisabled}
-              onClick={() => void onSaveTranslationEn()}
-              className="gap-1.5"
-            >
-              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
-              {t("save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Arabic translation */}
-      <Dialog
-        open={translationArOpen}
-        onOpenChange={(open) => {
-          setTranslationArOpen(open);
-          if (!open) setTranslationArForm(null);
-          else if (item) setTranslationArForm({ ...translationsFromItem(item).ar });
-        }}
-      >
-        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[640px]">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
-                <Globe className="size-3.5 text-muted-foreground" />
-              </div>
-              {t("dialogEditTranslationTitle", { locale: t("langAr") })}
-            </DialogTitle>
-            <DialogDescription className="text-xs">{t("dialogEditTranslationDescription")}</DialogDescription>
-          </DialogHeader>
-          <Separator />
-          <div className="min-h-0 flex-1 overflow-y-auto py-2 pr-1">
-            {translationArForm ? (
-              <TranslationFieldsEditor
-                dir="rtl"
-                value={translationArForm}
-                onField={(key, v) => setTranslationArForm((s) => (s ? { ...s, [key]: v } : s))}
-                t={t}
-              />
-            ) : null}
-          </div>
-          <Separator />
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => setTranslationArOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button
-              type="button"
-              disabled={translationArSaveDisabled}
-              onClick={() => void onSaveTranslationAr()}
+              disabled={activeTranslationSaveDisabled}
+              onClick={() => void onSaveActiveTranslation()}
               className="gap-1.5"
             >
               {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}

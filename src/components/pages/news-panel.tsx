@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NewsDateTimePicker } from "@/components/news-date-time-picker";
 import {
   Tooltip,
@@ -223,6 +224,7 @@ export function NewsPanel() {
   const [createOpen, setCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [createErrors, setCreateErrors] = useState<CreateFormErrors>({});
+  const [createLocaleTab, setCreateLocaleTab] = useState<NewsLocale>(locale === "ar" ? "ar" : "en");
   const [form, setForm] = useState<NewsFormState>({
     dateTime: new Date(),
     isActive: true,
@@ -266,7 +268,22 @@ export function NewsPanel() {
     const localesOk =
       hasAtLeastOneNewsLocale(form.translations, form.tagsByLocale) &&
       !anyNewsFullContentOverLimit(form.translations);
+    const firstIncompleteLocale = (["en", "ar"] as const).find((loc) => {
+      const tr = form.translations[loc];
+      const hasCore = tr.title.trim().length > 0 && tr.fullContent.trim().length > 0;
+      return !hasCore;
+    });
+    const overLimitLocale = (["en", "ar"] as const).find(
+      (loc) => form.translations[loc].fullContent.length > 50000
+    );
     if (!validation.ok || !localesOk) {
+      if (!validation.ok && validation.errors.date) {
+        setCreateLocaleTab(locale === "ar" ? "ar" : "en");
+      } else if (overLimitLocale) {
+        setCreateLocaleTab(overLimitLocale);
+      } else if (firstIncompleteLocale) {
+        setCreateLocaleTab(firstIncompleteLocale);
+      }
       const vErrors = !validation.ok ? validation.errors : {};
       setCreateErrors({
         ...(!localesOk
@@ -292,6 +309,7 @@ export function NewsPanel() {
     if (imageFile) fd.append("image", imageFile);
     const payload = buildNewsTranslationsPayload(form.translations, form.tagsByLocale);
     if (Object.keys(payload).length === 0) {
+      setCreateLocaleTab(firstIncompleteLocale ?? (locale === "ar" ? "ar" : "en"));
       setCreateErrors({ title: t("translationsAtLeastOneRequired") });
       return;
     }
@@ -303,6 +321,7 @@ export function NewsPanel() {
       setCreateOpen(false); setCreateErrors({});
       setForm({ dateTime: new Date(), isActive: true, translations: emptyTranslations(), tagsByLocale: { en: "", ar: "" } });
       setImageFile(null);
+      setCreateLocaleTab(locale === "ar" ? "ar" : "en");
       await load();
     } catch (e) { toastApiError(e, t("createError")); }
     finally { setSubmitting(false); }
@@ -610,17 +629,21 @@ export function NewsPanel() {
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("translationsLabel")}</p>
                   <Badge variant="secondary" className="text-xs">{t("required")}</Badge>
                 </div>
-
-                {(["en", "ar"] as const).map((loc) => {
-                  const dir = loc === "ar" ? "rtl" : "ltr";
-                  const v = form.translations[loc];
-                  return (
-                    <div key={loc} className="rounded-xl border border-border/60 bg-background p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-semibold">{loc === "en" ? t("langEn") : t("langAr")}</p>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{loc}</span>
-                      </div>
-                      <div className="grid gap-3">
+                <Tabs value={createLocaleTab} onValueChange={(v) => setCreateLocaleTab(v === "ar" ? "ar" : "en")}>
+                  <TabsList>
+                    <TabsTrigger value="en">{t("langEn")}</TabsTrigger>
+                    <TabsTrigger value="ar">{t("langAr")}</TabsTrigger>
+                  </TabsList>
+                  {(["en", "ar"] as const).map((loc) => {
+                    const dir = loc === "ar" ? "rtl" : "ltr";
+                    const v = form.translations[loc];
+                    return (
+                      <TabsContent keepMounted key={loc} value={loc} className="rounded-xl border border-border/60 bg-background p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="text-sm font-semibold">{loc === "en" ? t("langEn") : t("langAr")}</p>
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{loc}</span>
+                        </div>
+                        <div className="grid gap-3">
                         <div className="grid gap-1.5">
                           <Label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                             {t("fieldTitle")}
@@ -746,10 +769,11 @@ export function NewsPanel() {
                             }
                           />
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                        </div>
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
               </div>
 
               {/* Date picker */}

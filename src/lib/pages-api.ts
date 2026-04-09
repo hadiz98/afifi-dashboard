@@ -4,7 +4,7 @@ import { apiFetch, readApiData } from "@/lib/api";
 import { ApiError } from "@/lib/api-error";
 
 export type PageLocale = "en" | "ar";
-export type PageKey = "home" | "farm" | "news" | "events" | "horses" | "contact";
+export type PageKey = "home" | "farm" | "about" | "news" | "events" | "horses" | "contact";
 export type PageTitleColor = "black" | "white";
 
 export type PageTranslation = {
@@ -12,7 +12,7 @@ export type PageTranslation = {
   title: string;
   titleColor?: PageTitleColor;
   subtitle?: string | null;
-  text: string;
+  text?: string | null;
   metaDescription?: string | null;
   metaKeywords?: string | null;
 };
@@ -61,7 +61,7 @@ export function normalizePageCoverImagePath(v: string): string {
 }
 
 function isPageKey(v: unknown): v is PageKey {
-  return v === "home" || v === "farm" || v === "news" || v === "events" || v === "horses" || v === "contact";
+  return v === "home" || v === "farm" || v === "about" || v === "news" || v === "events" || v === "horses" || v === "contact";
 }
 
 function parseMaybeJson(raw: unknown): unknown | null {
@@ -92,23 +92,6 @@ function unwrapList(raw: unknown): unknown[] {
   return [];
 }
 
-/** Strict: used for public responses where title+text must be present. */
-function normalizeTranslation(raw: unknown, locale?: PageLocale): PageTranslation | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  const loc = (typeof o.locale === "string" ? o.locale : locale) as PageLocale | undefined;
-  if (loc !== "en" && loc !== "ar") return null;
-  const title = typeof o.title === "string" ? o.title : "";
-  const text = typeof o.text === "string" ? o.text : "";
-  if (!title.trim() || !text.trim()) return null;
-  const subtitle = typeof o.subtitle === "string" ? o.subtitle : null;
-  const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
-  const metaDescription =
-    typeof o.metaDescription === "string" ? o.metaDescription : o.metaDescription == null ? null : null;
-  const metaKeywords = typeof o.metaKeywords === "string" ? o.metaKeywords : o.metaKeywords == null ? null : null;
-  return { locale: loc, title, titleColor, text, subtitle, metaDescription, metaKeywords };
-}
-
 function parseOptionalBoolean(v: unknown): boolean | undefined {
   if (v === true || v === 1 || v === "1" || v === "true") return true;
   if (v === false || v === 0 || v === "0" || v === "false") return false;
@@ -122,12 +105,19 @@ function normalizeStaffTranslation(raw: unknown, locale?: PageLocale): PageTrans
   const loc = (typeof o.locale === "string" ? o.locale : locale) as PageLocale | undefined;
   if (loc !== "en" && loc !== "ar") return null;
   const title = typeof o.title === "string" ? o.title : "";
-  const text = typeof o.text === "string" ? o.text : "";
+  const text = typeof o.text === "string" ? o.text : null;
   const titleColor = parseTitleColor(o.titleColor ?? o.title_color);
   const subtitle = typeof o.subtitle === "string" ? o.subtitle : o.subtitle == null ? null : null;
   const metaDescription =
     typeof o.metaDescription === "string" ? o.metaDescription : o.metaDescription == null ? null : null;
-  const metaKeywords = typeof o.metaKeywords === "string" ? o.metaKeywords : o.metaKeywords == null ? null : null;
+  const metaKeywords =
+    typeof o.metaKeywords === "string"
+      ? o.metaKeywords
+      : Array.isArray(o.metaKeywords)
+        ? o.metaKeywords.map((v) => String(v).trim()).filter(Boolean).join(", ")
+        : o.metaKeywords == null
+          ? null
+          : null;
   return { locale: loc, title, titleColor, text, subtitle, metaDescription, metaKeywords };
 }
 
@@ -179,13 +169,19 @@ function normalizePublicPage(raw: unknown, key: PageKey): PublicPageResponse | n
   if (!trRaw || typeof trRaw !== "object") return null;
   const trObj = trRaw as Record<string, unknown>;
   const title = typeof trObj.title === "string" ? trObj.title : "";
-  const text = typeof trObj.text === "string" ? trObj.text : "";
-  if (!title.trim() || !text.trim()) return null;
+  const text = typeof trObj.text === "string" ? trObj.text : null;
+  if (!title.trim()) return null;
   const subtitle = typeof trObj.subtitle === "string" ? trObj.subtitle : trObj.subtitle == null ? null : null;
   const metaDescription =
     typeof trObj.metaDescription === "string" ? trObj.metaDescription : trObj.metaDescription == null ? null : null;
   const metaKeywords =
-    typeof trObj.metaKeywords === "string" ? trObj.metaKeywords : trObj.metaKeywords == null ? null : null;
+    typeof trObj.metaKeywords === "string"
+      ? trObj.metaKeywords
+      : Array.isArray(trObj.metaKeywords)
+        ? trObj.metaKeywords.map((v) => String(v).trim()).filter(Boolean).join(", ")
+        : trObj.metaKeywords == null
+          ? null
+          : null;
   return {
     key,
     coverImage,

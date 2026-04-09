@@ -4,7 +4,7 @@ import { apiFetch, readApiData } from "@/lib/api";
 import { ApiError } from "@/lib/api-error";
 
 export type PageLocale = "en" | "ar";
-export type PageKey = "home" | "farm" | "about" | "news" | "events" | "horses" | "contact";
+export type PageKey = "home" | "about" | "farm" | "news" | "events" | "horses" | "contact";
 export type PageTitleColor = "black" | "white";
 
 export type PageTranslation = {
@@ -61,7 +61,15 @@ export function normalizePageCoverImagePath(v: string): string {
 }
 
 function isPageKey(v: unknown): v is PageKey {
-  return v === "home" || v === "farm" || v === "about" || v === "news" || v === "events" || v === "horses" || v === "contact";
+  return (
+    v === "home" ||
+    v === "about" ||
+    v === "farm" ||
+    v === "news" ||
+    v === "events" ||
+    v === "horses" ||
+    v === "contact"
+  );
 }
 
 function parseMaybeJson(raw: unknown): unknown | null {

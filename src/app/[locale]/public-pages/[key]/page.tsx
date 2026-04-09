@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { DynamicLandingPage } from "@/components/landing/dynamic-landing-page";
 import type { PageKey } from "@/lib/pages-api";
 
-const allowed = new Set(["home", "farm", "about", "news", "events", "horses", "contact"]);
+const allowed = new Set(["home", "about", "news", "events", "horses", "contact"]);
 
 export default async function PublicPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;

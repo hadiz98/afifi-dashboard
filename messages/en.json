@@ -16,6 +16,7 @@
     "sessions": "Sessions",
     "news": "News",
     "pages": "Pages",
+    "farm": "Farm",
     "gallery": "Gallery",
     "settings": "Settings",
     "newsletter": "Newsletter",
@@ -93,6 +94,24 @@
       "horses": "Horses",
       "contact": "Contact"
     }
+  },
+  "FarmAdmin": {
+    "title": "Farm",
+    "description": "Edit farm text content by language. Image fields are hidden in this phase.",
+    "loadError": "Could not load farm content",
+    "saveSuccess": "Farm content saved",
+    "saveError": "Could not save farm content",
+    "save": "Save",
+    "invalid": "Both English and Arabic hero titles are required.",
+    "isActive": "Visible",
+    "rootSection": "Top content",
+    "sectionsTitle": "Content editor",
+    "langEn": "English",
+    "langAr": "Arabic",
+    "fieldTitle": "Title",
+    "fieldSubtitle": "Subtitle",
+    "fieldText": "Text",
+    "fieldImage": "Images"
   },
   "LandingPage": {
     "loadError": "Could not load page",

@@ -16,6 +16,7 @@
     "sessions": "الجلسات",
     "news": "الأخبار",
     "pages": "الصفحات",
+    "farm": "المزرعة",
     "gallery": "المعرض",
     "settings": "الإعدادات",
     "newsletter": "النشرة البريدية",
@@ -93,6 +94,24 @@
       "horses": "الخيل",
       "contact": "تواصل"
     }
+  },
+  "FarmAdmin": {
+    "title": "المزرعة",
+    "description": "تعديل نصوص صفحة المزرعة لكل لغة. حقول الصور مخفية في هذه المرحلة.",
+    "loadError": "تعذر تحميل محتوى المزرعة",
+    "saveSuccess": "تم حفظ محتوى المزرعة",
+    "saveError": "تعذر حفظ محتوى المزرعة",
+    "save": "حفظ",
+    "invalid": "عنوان البطل مطلوب بالإنجليزية والعربية.",
+    "isActive": "مرئية",
+    "rootSection": "المحتوى العلوي",
+    "sectionsTitle": "محرر المحتوى",
+    "langEn": "الإنجليزية",
+    "langAr": "العربية",
+    "fieldTitle": "العنوان",
+    "fieldSubtitle": "العنوان الفرعي",
+    "fieldText": "النص",
+    "fieldImage": "الصور"
   },
   "LandingPage": {
     "loadError": "تعذر تحميل الصفحة",

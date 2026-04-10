@@ -8,6 +8,7 @@ export type HorseCategory = "stallion" | "mare" | "filly" | "colt";
 
 /** Structured pedigree on the horse record (not localized). API may send object or JSON string. */
 export type HorsePedigreeRelative = {
+  id?: string | null;
   name?: string | null;
   birthDate?: string | null;
   color?: string | null;
@@ -16,8 +17,29 @@ export type HorsePedigreeRelative = {
 export type HorsePedigree = {
   father?: HorsePedigreeRelative | null;
   mother?: HorsePedigreeRelative | null;
-  grandfather?: HorsePedigreeRelative | null;
-  grandmother?: HorsePedigreeRelative | null;
+};
+
+export type HorsePedigreeUpdatePayload = {
+  sireId?: string | null;
+  damId?: string | null;
+  manual?: {
+    father?: {
+      name?: string | null;
+      birthDate?: string | null;
+      color?: string | null;
+    } | null;
+    mother?: {
+      name?: string | null;
+      birthDate?: string | null;
+      color?: string | null;
+    } | null;
+  };
+};
+
+export type HorseParentRef = {
+  id: string;
+  slug: string;
+  name: string;
 };
 
 export type HorseTranslation = {
@@ -48,6 +70,10 @@ export type HorseAdminListItem = {
   createdAt?: string | null;
   updatedAt?: string | null;
   deletedAt?: string | null;
+  sireId?: string | null;
+  damId?: string | null;
+  sire?: HorseParentRef | null;
+  dam?: HorseParentRef | null;
   translations: HorseTranslation[];
 };
 
@@ -61,6 +87,10 @@ export type HorseDetails = HorseAdminListItem & {
   owner?: string | null;
   notes?: string | null;
   pedigree?: HorsePedigree | null;
+  sireId?: string | null;
+  damId?: string | null;
+  sire?: HorseParentRef | null;
+  dam?: HorseParentRef | null;
   media?: HorseMedia[];
   awards?: HorseAward[];
 };
@@ -160,11 +190,22 @@ function readOptionalTrimmedString(obj: Record<string, unknown>, keys: string[])
 function normalizePedigreeRelative(data: unknown): HorsePedigreeRelative | null {
   if (!data || typeof data !== "object") return null;
   const o = data as Record<string, unknown>;
+  const id = readOptionalTrimmedString(o, ["id"]);
   const name = readOptionalTrimmedString(o, ["name"]);
   const birthDate = readOptionalTrimmedString(o, ["birthDate", "birth_date"]);
   const color = readOptionalTrimmedString(o, ["color"]);
-  if (!name && !birthDate && !color) return null;
-  return { name: name ?? null, birthDate: birthDate ?? null, color: color ?? null };
+  if (!id && !name && !birthDate && !color) return null;
+  return { id: id ?? null, name: name ?? null, birthDate: birthDate ?? null, color: color ?? null };
+}
+
+function normalizeParentRef(data: unknown): HorseParentRef | null {
+  if (!data || typeof data !== "object") return null;
+  const o = data as Record<string, unknown>;
+  const id = pickString(o, ["id"]);
+  const slug = pickString(o, ["slug"]);
+  const name = pickString(o, ["name"]);
+  if (!id || !slug || !name) return null;
+  return { id, slug, name };
 }
 
 export function normalizePedigreeRaw(raw: unknown): HorsePedigree | null {
@@ -183,10 +224,8 @@ export function normalizePedigreeRaw(raw: unknown): HorsePedigree | null {
   const o = raw as Record<string, unknown>;
   const father = normalizePedigreeRelative(o.father);
   const mother = normalizePedigreeRelative(o.mother);
-  const grandfather = normalizePedigreeRelative(o.grandfather);
-  const grandmother = normalizePedigreeRelative(o.grandmother);
-  if (!father && !mother && !grandfather && !grandmother) return null;
-  return { father, mother, grandfather, grandmother };
+  if (!father && !mother) return null;
+  return { father, mother };
 }
 
 function normalizeTranslation(data: unknown): HorseTranslation | null {
@@ -305,6 +344,10 @@ export function normalizeHorseAdminListItem(data: unknown): HorseAdminListItem |
     createdAt: pickString(o, ["createdAt", "created_at"]) ?? null,
     updatedAt: pickString(o, ["updatedAt", "updated_at"]) ?? null,
     deletedAt: pickString(o, ["deletedAt", "deleted_at"]) ?? null,
+    sireId: pickString(o, ["sireId", "sire_id"]) ?? null,
+    damId: pickString(o, ["damId", "dam_id"]) ?? null,
+    sire: normalizeParentRef(o.sire),
+    dam: normalizeParentRef(o.dam),
     translations,
   };
 }
@@ -323,6 +366,10 @@ export function normalizeHorseDetails(data: unknown): HorseDetails | null {
     owner: pickString(o, ["owner"]) ?? null,
     notes: pickString(o, ["notes"]) ?? null,
     pedigree: normalizePedigreeRaw(pedigreeRaw),
+    sireId: pickString(o, ["sireId", "sire_id"]) ?? null,
+    damId: pickString(o, ["damId", "dam_id"]) ?? null,
+    sire: normalizeParentRef(o.sire),
+    dam: normalizeParentRef(o.dam),
     media: Array.isArray(o.media)
       ? o.media
           .map((x) => normalizeHorseMedia(x))
@@ -339,6 +386,11 @@ export function normalizeHorseDetails(data: unknown): HorseDetails | null {
 export type HorsesPageResult = {
   rows: HorseAdminListItem[];
   meta: { total: number; page: number; limit: number; pages: number };
+};
+
+export type HorseSearchResult = {
+  rows: HorseAdminListItem[];
+  meta: { total: number; limit: number };
 };
 
 export type PublicHorseListItem = {
@@ -511,6 +563,41 @@ export async function fetchHorseById(id: string): Promise<HorseDetails> {
   return item;
 }
 
+export async function searchHorsesByName(params: {
+  q: string;
+  limit?: number;
+}): Promise<HorseSearchResult> {
+  const q = params.q.trim();
+  const limit = Math.max(1, Math.min(50, params.limit ?? 20));
+  if (!q) return { rows: [], meta: { total: 0, limit } };
+  const qs = new URLSearchParams();
+  qs.set("q", q);
+  qs.set("limit", String(limit));
+  const res = await apiFetch(`/api/horses/search?${qs.toString()}`, { method: "GET" });
+  const body = await parseJson(res);
+  if (!res.ok) throw ApiError.fromBody(body, res.status);
+  if (!body || typeof body !== "object") return { rows: [], meta: { total: 0, limit } };
+  const record = body as Record<string, unknown>;
+  const outerData = record.data;
+  const inner = outerData && typeof outerData === "object" ? (outerData as Record<string, unknown>) : null;
+  const list =
+    (inner && Array.isArray(inner.data) ? inner.data : null) ??
+    (Array.isArray(outerData) ? outerData : null) ??
+    (Array.isArray(record.data) ? record.data : null);
+  const meta = (inner?.meta as Record<string, unknown> | undefined) ?? (record.meta as Record<string, unknown> | undefined);
+
+  const rows = Array.isArray(list)
+    ? list.map((x) => normalizeHorseAdminListItem(x)).filter((x): x is HorseAdminListItem => x !== null)
+    : [];
+  return {
+    rows,
+    meta: {
+      total: typeof meta?.total === "number" ? meta.total : rows.length,
+      limit: typeof meta?.limit === "number" ? meta.limit : limit,
+    },
+  };
+}
+
 export async function fetchPublicHorsesPage(params: {
   locale: HorseLocale;
   page?: number;
@@ -583,6 +670,18 @@ export async function updateHorse(id: string, form: FormData): Promise<HorseDeta
   const raw = await readApiData<unknown>(res);
   const item = normalizeHorseDetails(raw);
   if (!item) throw new ApiError("Invalid horse update response", { statusCode: 502 });
+  return item;
+}
+
+export async function updateHorsePedigree(id: string, payload: HorsePedigreeUpdatePayload): Promise<HorseDetails> {
+  const res = await apiFetch(`/api/horses/${encodeURIComponent(id)}/pedigree`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+  });
+  const raw = await readApiData<unknown>(res);
+  const item = normalizeHorseDetails(raw);
+  if (!item) throw new ApiError("Invalid horse pedigree update response", { statusCode: 502 });
   return item;
 }
 

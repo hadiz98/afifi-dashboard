@@ -1295,7 +1295,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           else if (item) setProfileForm(profileFormFromItem(item));
         }}
       >
-        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[560px]">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92dvh] overflow-hidden flex flex-col sm:w-auto sm:max-w-[560px]">
           <DialogHeader className="shrink-0 pb-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
@@ -1488,7 +1488,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           if (open && item) setPedigreeEdit(clonePedigree(item.pedigree));
         }}
       >
-        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[560px]">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92dvh] overflow-hidden flex flex-col sm:w-auto sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
@@ -1499,7 +1499,8 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             <DialogDescription className="text-xs">{t("dialogEditPedigreeDescription")}</DialogDescription>
           </DialogHeader>
           <Separator />
-          <div className="grid gap-3 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="grid gap-3 py-2 pr-1">
             {(["father", "mother", "grandfather", "grandmother"] as const).map((pkey) => {
               const relLabel =
                 pkey === "father"
@@ -1543,9 +1544,10 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                 </div>
               );
             })}
+            </div>
           </div>
           <Separator />
-          <DialogFooter className="gap-2">
+          <DialogFooter className="shrink-0 gap-2">
             <Button type="button" variant="outline" disabled={submitting} onClick={() => setPedigreeEditOpen(false)}>
               {t("cancel")}
             </Button>
@@ -1572,7 +1574,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           }
         }}
       >
-        <DialogContent className="max-h-[92dvh] overflow-hidden flex flex-col sm:max-w-[640px]">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-h-[92dvh] overflow-hidden flex flex-col sm:w-auto sm:max-w-[640px]">
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <div className="flex size-7 items-center justify-center rounded-lg border bg-muted">
@@ -1583,8 +1585,12 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             <DialogDescription className="text-xs">{t("dialogEditTranslationDescription")}</DialogDescription>
           </DialogHeader>
           <Separator />
-          <Tabs value={translationTab} onValueChange={(v) => setTranslationTab(v === "ar" ? "ar" : "en")}>
-            <TabsList>
+          <Tabs
+            value={translationTab}
+            onValueChange={(v) => setTranslationTab(v === "ar" ? "ar" : "en")}
+            className="min-h-0 flex flex-1 flex-col"
+          >
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="en">{t("langEn")}</TabsTrigger>
               <TabsTrigger value="ar">{t("langAr")}</TabsTrigger>
             </TabsList>
@@ -1612,7 +1618,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             </div>
           </Tabs>
           <Separator />
-          <DialogFooter className="gap-2">
+          <DialogFooter className="shrink-0 gap-2">
             <Button type="button" variant="outline" disabled={submitting} onClick={() => setTranslationEditOpen(false)}>
               {t("cancel")}
             </Button>

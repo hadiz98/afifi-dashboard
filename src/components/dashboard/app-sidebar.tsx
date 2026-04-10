@@ -18,7 +18,7 @@ import {
   Settings,
   ChevronDown,
   FileText,
-  Tractor,
+  Info,
 } from "lucide-react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
@@ -75,7 +75,7 @@ const allNavDefs: readonly NavDef[] = [
   { href: "/", labelKey: "home", icon: LayoutDashboard },
   { href: "/news", labelKey: "news", icon: Newspaper },
   { href: "/pages", labelKey: "pages", icon: FileText, staffOnly: true },
-  { href: "/farm", labelKey: "farm", icon: Tractor, staffOnly: true },
+  { href: "/farm", labelKey: "farm", icon: Info, staffOnly: true },
   { href: "/gallery", labelKey: "gallery", icon: Images, staffOnly: true },
   { href: "/settings", labelKey: "settings", icon: Settings, staffOnly: true },
   {
@@ -104,7 +104,7 @@ export function AppSidebar() {
   const navDefs = allNavDefs.filter(
     (item) => !item.staffOnly || (ready && isStaff)
   );
-  const packedKeys: readonly NavLabelKey[] = ["users", "roles", "profile", "password"];
+  const packedKeys: readonly NavLabelKey[] = ["users", "roles", "profile", "password", "sessions"];
   const mainNavDefs = navDefs.filter((x) => !packedKeys.includes(x.labelKey));
 
   function navActive(href: string): boolean {
@@ -263,6 +263,10 @@ export function AppSidebar() {
                     <DropdownMenuItem onClick={() => router.push("/password")}>
                       <KeyRound className="size-4" aria-hidden />
                       {t("password")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push("/sessions")}>
+                      <MonitorSmartphone className="size-4" aria-hidden />
+                      {t("sessions")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

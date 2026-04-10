@@ -269,6 +269,13 @@
     "recentSubscribersDescription": "أحدث اشتراكات النشرة البريدية.",
     "recentSubscribersEmpty": "لا يوجد مشتركون حديثون."
   },
+  "CacheActions": {
+    "button": "تحديث الكاش",
+    "loading": "جارٍ تحديث الكاش…",
+    "success": "تم تحديث كاش صفحة الهبوط ({count} وسوم).",
+    "error": "تعذر تحديث كاش صفحة الهبوط",
+    "networkError": "حدث خطأ في الشبكة أثناء تحديث الكاش"
+  },
   "LoginPage": {
     "title": "تسجيل الدخول",
     "description": "أدخل البريد الإلكتروني وكلمة المرور.",

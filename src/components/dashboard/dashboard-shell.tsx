@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useLocale } from "next-intl";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
+import { InvalidateLandingCacheButton } from "@/components/dashboard/invalidate-landing-cache-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   SidebarInset,
@@ -37,6 +38,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             {/* Spacer pushes ThemeToggle to the trailing edge */}
             <div className="flex-1" />
 
+            <InvalidateLandingCacheButton />
             <ThemeToggle />
           </header>
 

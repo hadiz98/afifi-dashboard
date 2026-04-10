@@ -55,7 +55,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const PAGE_KEYS: readonly PageKey[] = [
   "home",
-  "about",
   "farm",
   "news",
   "events",
@@ -65,7 +64,6 @@ const PAGE_KEYS: readonly PageKey[] = [
 
 const KEY_TO_PATH: Record<PageKey, string> = {
   home: "/",
-  about: "/about",
   farm: "/farm",
   news: "/news",
   events: "/events",
@@ -75,7 +73,6 @@ const KEY_TO_PATH: Record<PageKey, string> = {
 
 const KEY_TO_ICON: Record<PageKey, React.ElementType> = {
   home: Layers,
-  about: Globe,
   farm: Globe,
   news: FileText,
   events: FileText,

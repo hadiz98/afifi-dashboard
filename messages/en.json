@@ -269,6 +269,13 @@
     "recentSubscribersDescription": "Latest newsletter sign-ups.",
     "recentSubscribersEmpty": "No recent subscribers."
   },
+  "CacheActions": {
+    "button": "Invalidate cache",
+    "loading": "Invalidating…",
+    "success": "Landing cache invalidated ({count} tags).",
+    "error": "Could not invalidate landing cache",
+    "networkError": "Network error while invalidating cache"
+  },
   "LoginPage": {
     "title": "Sign in",
     "description": "Use your account email and password.",

@@ -104,6 +104,8 @@ export function HorsesPanel() {
     slug: string;
     category: HorseCategory;
     isActive: boolean;
+    isForSale: boolean;
+    isHeritage: boolean;
     birthDate: string;
     heightCm: string;
     owner: string;
@@ -112,6 +114,8 @@ export function HorsesPanel() {
     slug: "",
     category: "stallion",
     isActive: true,
+    isForSale: false,
+    isHeritage: false,
     birthDate: "",
     heightCm: "",
     owner: "",
@@ -150,6 +154,8 @@ export function HorsesPanel() {
       slug: "",
       category: "stallion",
       isActive: true,
+      isForSale: false,
+      isHeritage: false,
       birthDate: "",
       heightCm: "",
       owner: "",
@@ -175,6 +181,8 @@ export function HorsesPanel() {
       fd.append("slug", form.slug.trim());
       fd.append("category", form.category);
       fd.append("isActive", form.isActive ? "1" : "0");
+      fd.append("isForSale", form.isForSale ? "1" : "0");
+      fd.append("isHeritage", form.isHeritage ? "1" : "0");
       if (form.birthDate.trim()) fd.append("birthDate", form.birthDate.trim());
       if (form.heightCm.trim()) fd.append("heightCm", form.heightCm.trim());
       if (form.owner.trim()) fd.append("owner", form.owner.trim());
@@ -485,6 +493,22 @@ export function HorsesPanel() {
                     <p className="text-xs text-muted-foreground">{form.isActive ? t("active") : t("inactive")}</p>
                   </div>
                   <Switch checked={form.isActive} onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: v }))} />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
+                    <div>
+                      <Label className="text-sm font-medium">{t("fieldIsForSale")}</Label>
+                      <p className="text-xs text-muted-foreground">{form.isForSale ? t("yes") : t("no")}</p>
+                    </div>
+                    <Switch checked={form.isForSale} onCheckedChange={(v) => setForm((s) => ({ ...s, isForSale: v }))} />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
+                    <div>
+                      <Label className="text-sm font-medium">{t("fieldIsHeritage")}</Label>
+                      <p className="text-xs text-muted-foreground">{form.isHeritage ? t("yes") : t("no")}</p>
+                    </div>
+                    <Switch checked={form.isHeritage} onCheckedChange={(v) => setForm((s) => ({ ...s, isHeritage: v }))} />
+                  </div>
                 </div>
               </div>
 

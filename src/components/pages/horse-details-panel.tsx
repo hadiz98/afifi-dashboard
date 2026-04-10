@@ -233,6 +233,8 @@ type ProfileFormState = {
   slug: string;
   category: HorseCategory;
   isActive: boolean;
+  isForSale: boolean;
+  isHeritage: boolean;
   birthDate: string;
   heightCm: string;
   owner: string;
@@ -244,6 +246,8 @@ function profileFormFromItem(item: HorseDetails): ProfileFormState {
     slug: item.slug,
     category: item.category,
     isActive: item.isActive !== false,
+    isForSale: item.isForSale === true,
+    isHeritage: item.isHeritage === true,
     birthDate: item.birthDate ?? "",
     heightCm: typeof item.heightCm === "number" ? String(item.heightCm) : "",
     owner: item.owner ?? "",
@@ -349,6 +353,11 @@ const awardSchema = z.object({
   title: z.string().trim().min(1),
   placing: z.string().trim().optional(),
   location: z.string().trim().optional(),
+  externalLink: z
+    .string()
+    .trim()
+    .optional()
+    .refine((v) => !v || /^https?:\/\/\S+$/i.test(v), { message: "invalid-url" }),
   notes: z.string().trim().optional(),
 });
 
@@ -461,7 +470,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
   const [awardDeleteOpen, setAwardDeleteOpen] = useState(false);
   const [awardDeleteId, setAwardDeleteId] = useState<string | null>(null);
   const [awardFormError, setAwardFormError] = useState<string | null>(null);
-  const [awardForm, setAwardForm] = useState({ year: "", eventName: "", title: "", placing: "", location: "", notes: "" });
+  const [awardForm, setAwardForm] = useState({ year: "", eventName: "", title: "", placing: "", location: "", externalLink: "", notes: "" });
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -513,6 +522,8 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             slug: patch.base.slug ?? current.slug,
             category: patch.base.category ?? current.category,
             isActive: patch.base.isActive ?? (current.isActive !== false),
+            isForSale: patch.base.isForSale ?? (current.isForSale === true),
+            isHeritage: patch.base.isHeritage ?? (current.isHeritage === true),
             birthDate: patch.base.birthDate ?? (current.birthDate ?? ""),
             heightCm: patch.base.heightCm ?? (typeof current.heightCm === "number" ? String(current.heightCm) : ""),
             owner: patch.base.owner ?? (current.owner ?? ""),
@@ -534,6 +545,8 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           fd.append("slug", profileBase.slug.trim());
           fd.append("category", profileBase.category);
           fd.append("isActive", profileBase.isActive ? "1" : "0");
+          fd.append("isForSale", profileBase.isForSale ? "1" : "0");
+          fd.append("isHeritage", profileBase.isHeritage ? "1" : "0");
           if (profileBase.birthDate.trim()) fd.append("birthDate", profileBase.birthDate.trim());
           if (profileBase.heightCm.trim()) fd.append("heightCm", profileBase.heightCm.trim());
           if (profileBase.owner.trim()) fd.append("owner", profileBase.owner.trim());
@@ -720,25 +733,30 @@ export function HorseDetailsPanel({ id }: { id: string }) {
 
   function openAwardCreate() {
     setAwardFormError(null); setAwardEditingId(null);
-    setAwardForm({ year: "", eventName: "", title: "", placing: "", location: "", notes: "" });
+    setAwardForm({ year: "", eventName: "", title: "", placing: "", location: "", externalLink: "", notes: "" });
     setAwardDialogOpen(true);
   }
 
   function openAwardEdit(a: HorseAward) {
     setAwardFormError(null); setAwardEditingId(a.id);
-    setAwardForm({ year: String(a.year), eventName: a.eventName ?? "", title: a.title ?? "", placing: a.placing ?? "", location: a.location ?? "", notes: a.notes ?? "" });
+    setAwardForm({ year: String(a.year), eventName: a.eventName ?? "", title: a.title ?? "", placing: a.placing ?? "", location: a.location ?? "", externalLink: a.externalLink ?? "", notes: a.notes ?? "" });
     setAwardDialogOpen(true);
   }
 
   async function onSaveAward() {
     setAwardFormError(null);
-    if (!awardSchema.safeParse(awardForm).success) { setAwardFormError(tAwards("invalid")); return; }
+    const parsed = awardSchema.safeParse(awardForm);
+    if (!parsed.success) {
+      const badUrl = parsed.error.issues.some((i) => i.path[0] === "externalLink");
+      setAwardFormError(badUrl ? tAwards("invalidExternalLink") : tAwards("invalid"));
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
         year: Number(awardForm.year), eventName: awardForm.eventName.trim(),
         title: awardForm.title.trim(), placing: awardForm.placing.trim() || null,
-        location: awardForm.location.trim() || null, notes: awardForm.notes.trim() || null,
+        location: awardForm.location.trim() || null, externalLink: awardForm.externalLink.trim() || null, notes: awardForm.notes.trim() || null,
       };
       if (awardEditingId) { await updateHorseAward(id, awardEditingId, payload); toast.success(tAwards("updateSuccess")); }
       else { await createHorseAward(id, payload); toast.success(tAwards("createSuccess")); }
@@ -973,6 +991,18 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                   </div>
                 ))}
               </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {item.isForSale ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
+                    {t("badgeForSale")}
+                  </span>
+                ) : null}
+                {item.isHeritage ? (
+                  <span className="inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-400">
+                    {t("badgeHeritage")}
+                  </span>
+                ) : null}
+              </div>
               {item.notes?.trim() ? (
                 <div className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("fieldNotes")}</p>
@@ -1134,6 +1164,16 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                         <p className="truncate text-xs text-muted-foreground">
                           {a.eventName}{a.location ? ` · ${a.location}` : ""}{a.placing ? ` · ${a.placing}` : ""}
                         </p>
+                        {a.externalLink ? (
+                          <a
+                            href={a.externalLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-flex text-xs text-primary underline-offset-2 hover:underline"
+                          >
+                            {tAwards("openExternalLink")}
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -1387,6 +1427,32 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                     checked={profileForm.isActive}
                     onCheckedChange={(v) => setProfileForm((s) => (s ? { ...s, isActive: v } : s))}
                   />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                    <div>
+                      <Label className="text-sm font-medium">{t("fieldIsForSale")}</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {profileForm.isForSale ? t("yes") : t("no")}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={profileForm.isForSale}
+                      onCheckedChange={(v) => setProfileForm((s) => (s ? { ...s, isForSale: v } : s))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                    <div>
+                      <Label className="text-sm font-medium">{t("fieldIsHeritage")}</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {profileForm.isHeritage ? t("yes") : t("no")}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={profileForm.isHeritage}
+                      onCheckedChange={(v) => setProfileForm((s) => (s ? { ...s, isHeritage: v } : s))}
+                    />
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1909,6 +1975,16 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                 <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAwards("fieldLocation")}</Label>
                 <Input value={awardForm.location} className="h-9" onChange={(e) => setAwardForm((s) => ({ ...s, location: e.target.value }))} />
               </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAwards("fieldExternalLink")}</Label>
+              <Input
+                type="url"
+                value={awardForm.externalLink}
+                placeholder={tAwards("fieldExternalLinkPlaceholder")}
+                className="h-9"
+                onChange={(e) => setAwardForm((s) => ({ ...s, externalLink: e.target.value }))}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{tAwards("fieldNotes")}</Label>

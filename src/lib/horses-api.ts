@@ -43,6 +43,8 @@ export type HorseAdminListItem = {
   category: HorseCategory;
   coverImage?: string | null;
   isActive?: boolean;
+  isForSale?: boolean;
+  isHeritage?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
   deletedAt?: string | null;
@@ -234,6 +236,7 @@ export type HorseAward = {
   title: string;
   placing?: string | null;
   location?: string | null;
+  externalLink?: string | null;
   notes?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -270,6 +273,7 @@ function normalizeHorseAward(data: unknown): HorseAward | null {
     title,
     placing: pickString(o, ["placing"]) ?? null,
     location: pickString(o, ["location"]) ?? null,
+    externalLink: pickString(o, ["externalLink", "external_link"]) ?? null,
     notes: pickString(o, ["notes"]) ?? null,
     createdAt: pickString(o, ["createdAt", "created_at"]) ?? null,
     updatedAt: pickString(o, ["updatedAt", "updated_at"]) ?? null,
@@ -296,6 +300,8 @@ export function normalizeHorseAdminListItem(data: unknown): HorseAdminListItem |
     category,
     coverImage: coverImageRaw ? normalizeHorseCoverImagePath(coverImageRaw) : null,
     isActive: pickBoolean(o, ["isActive", "is_active"]) ?? undefined,
+    isForSale: pickBoolean(o, ["isForSale", "is_for_sale"]) ?? undefined,
+    isHeritage: pickBoolean(o, ["isHeritage", "is_heritage"]) ?? undefined,
     createdAt: pickString(o, ["createdAt", "created_at"]) ?? null,
     updatedAt: pickString(o, ["updatedAt", "updated_at"]) ?? null,
     deletedAt: pickString(o, ["deletedAt", "deleted_at"]) ?? null,

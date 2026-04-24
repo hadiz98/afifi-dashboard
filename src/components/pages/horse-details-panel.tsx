@@ -120,6 +120,7 @@ type ProfileFormState = {
   category: HorseCategory;
   isActive: boolean;
   isForSale: boolean;
+  isSold: boolean;
   isHeritage: boolean;
   birthDate: string;
   heightCm: string;
@@ -203,6 +204,7 @@ function profileFormFromItem(item: HorseDetails): ProfileFormState {
     category: item.category,
     isActive: item.isActive !== false,
     isForSale: item.isForSale === true,
+    isSold: item.isSold === true,
     isHeritage: item.isHeritage === true,
     birthDate: item.birthDate ?? "",
     heightCm: typeof item.heightCm === "number" ? String(item.heightCm) : "",
@@ -321,7 +323,12 @@ function TranslationFieldsEditor({
 }
 
 const updateSchema = z.object({
-  slug: z.string().trim().min(1),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(120)
+    .regex(/^[A-Za-z0-9_.-]+$/, { message: "invalid-slug" }),
   category: z.enum(categories),
   isActive: z.boolean(),
 });
@@ -544,12 +551,16 @@ export function HorseDetailsPanel({ id }: { id: string }) {
             category: patch.base.category ?? current.category,
             isActive: patch.base.isActive ?? (current.isActive !== false),
             isForSale: patch.base.isForSale ?? (current.isForSale === true),
+            isSold: patch.base.isSold ?? (current.isSold === true),
             isHeritage: patch.base.isHeritage ?? (current.isHeritage === true),
             birthDate: patch.base.birthDate ?? (current.birthDate ?? ""),
             heightCm: patch.base.heightCm ?? (typeof current.heightCm === "number" ? String(current.heightCm) : ""),
             owner: patch.base.owner ?? (current.owner ?? ""),
             notes: patch.base.notes ?? (current.notes ?? ""),
           };
+          if (profileBase.isSold) {
+            profileBase.isForSale = false;
+          }
           if (!profileFormSchema.safeParse(profileBase).success) {
             toast.error(t("invalidProfile"));
             return false;
@@ -567,6 +578,7 @@ export function HorseDetailsPanel({ id }: { id: string }) {
           fd.append("category", profileBase.category);
           fd.append("isActive", profileBase.isActive ? "1" : "0");
           fd.append("isForSale", profileBase.isForSale ? "1" : "0");
+          fd.append("isSold", profileBase.isSold ? "1" : "0");
           fd.append("isHeritage", profileBase.isHeritage ? "1" : "0");
           if (profileBase.birthDate.trim()) fd.append("birthDate", profileBase.birthDate.trim());
           if (profileBase.heightCm.trim()) fd.append("heightCm", profileBase.heightCm.trim());
@@ -989,6 +1001,11 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                     {t("badgeForSale")}
                   </span>
                 )}
+                {item.isSold && (
+                  <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                    {t("badgeSold")}
+                  </span>
+                )}
                 {item.isHeritage && (
                   <span className="inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-400">
                     {t("badgeHeritage")}
@@ -1315,7 +1332,25 @@ export function HorseDetailsPanel({ id }: { id: string }) {
                       <Label className="text-sm font-medium">{t("fieldIsForSale")}</Label>
                       <p className="text-xs text-muted-foreground">{profileForm.isForSale ? t("yes") : t("no")}</p>
                     </div>
-                    <Switch checked={profileForm.isForSale} onCheckedChange={(v) => setProfileForm((s) => s ? { ...s, isForSale: v } : s)} />
+                    <Switch
+                      checked={profileForm.isForSale}
+                      disabled={profileForm.isSold}
+                      onCheckedChange={(v) =>
+                        setProfileForm((s) => s ? { ...s, isForSale: s.isSold ? false : v } : s)
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                    <div>
+                      <Label className="text-sm font-medium">{t("fieldIsSold")}</Label>
+                      <p className="text-xs text-muted-foreground">{profileForm.isSold ? t("yes") : t("no")}</p>
+                    </div>
+                    <Switch
+                      checked={profileForm.isSold}
+                      onCheckedChange={(v) =>
+                        setProfileForm((s) => s ? { ...s, isSold: v, isForSale: v ? false : s.isForSale } : s)
+                      }
+                    />
                   </div>
                   <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
                     <div>

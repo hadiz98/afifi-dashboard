@@ -70,7 +70,12 @@ function pickName(row: HorseAdminListItem, locale: string): { name: string; subt
 }
 
 const createHorseSchema = z.object({
-  slug: z.string().trim().min(1),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(120)
+    .regex(/^[A-Za-z0-9_.-]+$/, { message: "invalid-slug" }),
   category: z.enum(categories),
   isActive: z.boolean().optional(),
 });
@@ -105,6 +110,7 @@ export function HorsesPanel() {
     category: HorseCategory;
     isActive: boolean;
     isForSale: boolean;
+    isSold: boolean;
     isHeritage: boolean;
     birthDate: string;
     heightCm: string;
@@ -115,6 +121,7 @@ export function HorsesPanel() {
     category: "stallion",
     isActive: true,
     isForSale: false,
+    isSold: false,
     isHeritage: false,
     birthDate: "",
     heightCm: "",
@@ -155,6 +162,7 @@ export function HorsesPanel() {
       category: "stallion",
       isActive: true,
       isForSale: false,
+      isSold: false,
       isHeritage: false,
       birthDate: "",
       heightCm: "",
@@ -182,6 +190,7 @@ export function HorsesPanel() {
       fd.append("category", form.category);
       fd.append("isActive", form.isActive ? "1" : "0");
       fd.append("isForSale", form.isForSale ? "1" : "0");
+      fd.append("isSold", form.isSold ? "1" : "0");
       fd.append("isHeritage", form.isHeritage ? "1" : "0");
       if (form.birthDate.trim()) fd.append("birthDate", form.birthDate.trim());
       if (form.heightCm.trim()) fd.append("heightCm", form.heightCm.trim());
@@ -500,7 +509,21 @@ export function HorsesPanel() {
                       <Label className="text-sm font-medium">{t("fieldIsForSale")}</Label>
                       <p className="text-xs text-muted-foreground">{form.isForSale ? t("yes") : t("no")}</p>
                     </div>
-                    <Switch checked={form.isForSale} onCheckedChange={(v) => setForm((s) => ({ ...s, isForSale: v }))} />
+                    <Switch
+                      checked={form.isForSale}
+                      disabled={form.isSold}
+                      onCheckedChange={(v) => setForm((s) => ({ ...s, isForSale: s.isSold ? false : v }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
+                    <div>
+                      <Label className="text-sm font-medium">{t("fieldIsSold")}</Label>
+                      <p className="text-xs text-muted-foreground">{form.isSold ? t("yes") : t("no")}</p>
+                    </div>
+                    <Switch
+                      checked={form.isSold}
+                      onCheckedChange={(v) => setForm((s) => ({ ...s, isSold: v, isForSale: v ? false : s.isForSale }))}
+                    />
                   </div>
                   <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-3">
                     <div>

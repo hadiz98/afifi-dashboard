@@ -66,6 +66,7 @@ export type HorseAdminListItem = {
   coverImage?: string | null;
   isActive?: boolean;
   isForSale?: boolean;
+  isSold?: boolean;
   isHeritage?: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -340,6 +341,7 @@ export function normalizeHorseAdminListItem(data: unknown): HorseAdminListItem |
     coverImage: coverImageRaw ? normalizeHorseCoverImagePath(coverImageRaw) : null,
     isActive: pickBoolean(o, ["isActive", "is_active"]) ?? undefined,
     isForSale: pickBoolean(o, ["isForSale", "is_for_sale"]) ?? undefined,
+    isSold: pickBoolean(o, ["isSold", "is_sold"]) ?? undefined,
     isHeritage: pickBoolean(o, ["isHeritage", "is_heritage"]) ?? undefined,
     createdAt: pickString(o, ["createdAt", "created_at"]) ?? null,
     updatedAt: pickString(o, ["updatedAt", "updated_at"]) ?? null,

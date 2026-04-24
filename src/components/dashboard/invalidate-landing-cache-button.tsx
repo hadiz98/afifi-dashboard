@@ -14,6 +14,10 @@ type ProxyResponse = {
   error?: string;
 };
 
+function normalizeBaseUrl(value: string | undefined): string {
+  return (value ?? "").trim().replace(/\/$/, "");
+}
+
 export function InvalidateLandingCacheButton() {
   const t = useTranslations("CacheActions");
   const { isStaff, ready } = useAuthUser();
@@ -25,9 +29,21 @@ export function InvalidateLandingCacheButton() {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/revalidate-landing", {
+      const landingBase = normalizeBaseUrl(process.env.NEXT_PUBLIC_LANDING_BASE_URL);
+      if (!landingBase) {
+        toast.error("Missing NEXT_PUBLIC_LANDING_BASE_URL");
+        return;
+      }
+
+      const url = `${landingBase}/api/revalidate`;
+      const publicSecret = (process.env.NEXT_PUBLIC_LANDING_REVALIDATE_SECRET ?? "").trim();
+
+      const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(publicSecret ? { "x-revalidate-secret": publicSecret } : {}),
+        },
         body: JSON.stringify({}),
       });
 

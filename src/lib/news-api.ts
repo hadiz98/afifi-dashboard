@@ -1,6 +1,7 @@
 import { apiFetch, readApiData } from "@/lib/api";
 import { ApiError } from "@/lib/api-error";
 import { BRAND_MEDIA } from "@/lib/media-paths";
+import type { Video as LibraryVideo } from "@/lib/videos-api";
 
 export type NewsLocale = "en" | "ar";
 
@@ -326,6 +327,111 @@ export async function deleteNews(id: string): Promise<void> {
 
 export async function deleteNewsImage(id: string): Promise<void> {
   const res = await apiFetch(`/api/news/${encodeURIComponent(id)}/image`, { method: "DELETE" });
+  await readApiData<unknown>(res);
+}
+
+// ── Videos linking (staff) ───────────────────────────────────────────────────
+export type NewsVideoLink = {
+  id: string;
+  newsId: string;
+  videoId: string;
+  sortOrder: number;
+  video: LibraryVideo;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+function normalizeNewsVideoLink(raw: unknown): NewsVideoLink | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = pickString(o, ["id"]);
+  const newsId = pickString(o, ["newsId", "news_id"]);
+  const videoId = pickString(o, ["videoId", "video_id"]);
+  const sortOrderRaw = o.sortOrder ?? o.sort_order;
+  const sortOrder = typeof sortOrderRaw === "number" ? sortOrderRaw : typeof sortOrderRaw === "string" ? Number(sortOrderRaw) : 0;
+  const video = o.video as LibraryVideo | undefined;
+  if (!id || !newsId || !videoId || !video || typeof (video as any).id !== "string") return null;
+  return {
+    id,
+    newsId,
+    videoId,
+    sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+    video,
+    createdAt: pickString(o, ["createdAt", "created_at"]) ?? null,
+    updatedAt: pickString(o, ["updatedAt", "updated_at"]) ?? null,
+  };
+}
+
+function unwrapList(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    const data = o.data;
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object") {
+      const inner = data as Record<string, unknown>;
+      if (Array.isArray(inner.data)) return inner.data;
+    }
+  }
+  return [];
+}
+
+export async function fetchNewsVideoLinks(newsId: string): Promise<NewsVideoLink[]> {
+  const res = await apiFetch(`/api/news/${encodeURIComponent(newsId)}/videos`, { method: "GET" });
+  const raw = await readApiData<unknown>(res);
+  return unwrapList(raw)
+    .map((x) => normalizeNewsVideoLink(x))
+    .filter((x): x is NewsVideoLink => x !== null)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+}
+
+export async function addNewsVideoLink(
+  newsId: string,
+  payload: { videoId: string; sortOrder?: number }
+): Promise<NewsVideoLink> {
+  const res = await apiFetch(`/api/news/${encodeURIComponent(newsId)}/videos`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+  });
+  const raw = await readApiData<unknown>(res);
+  const link = normalizeNewsVideoLink(raw);
+  if (!link) throw new ApiError("Invalid news video link create response", { statusCode: 502 });
+  return link;
+}
+
+export async function updateNewsVideoLink(
+  newsId: string,
+  linkId: string,
+  payload: { sortOrder?: number }
+): Promise<NewsVideoLink> {
+  const res = await apiFetch(`/api/news/${encodeURIComponent(newsId)}/videos/${encodeURIComponent(linkId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+  });
+  const raw = await readApiData<unknown>(res);
+  const link = normalizeNewsVideoLink(raw);
+  if (!link) throw new ApiError("Invalid news video link update response", { statusCode: 502 });
+  return link;
+}
+
+export async function deleteNewsVideoLink(newsId: string, linkId: string): Promise<void> {
+  const res = await apiFetch(`/api/news/${encodeURIComponent(newsId)}/videos/${encodeURIComponent(linkId)}`, {
+    method: "DELETE",
+  });
+  await readApiData<unknown>(res);
+}
+
+export async function reorderNewsVideoLinks(
+  newsId: string,
+  items: { id: string; sortOrder: number }[]
+): Promise<void> {
+  const res = await apiFetch(`/api/news/${encodeURIComponent(newsId)}/videos/reorder`, {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
+    headers: { "Content-Type": "application/json" },
+  });
   await readApiData<unknown>(res);
 }
 

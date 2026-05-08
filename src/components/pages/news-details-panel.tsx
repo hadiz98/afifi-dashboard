@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Trash2,
   Upload,
+  Clapperboard,
   X,
   XCircle,
 } from "lucide-react";
@@ -22,7 +23,19 @@ import { toast } from "sonner";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/toast-api-error";
-import { deleteNews, deleteNewsImage, fetchNewsById, updateNews, type NewsItem } from "@/lib/news-api";
+import {
+  addNewsVideoLink,
+  deleteNews,
+  deleteNewsImage,
+  deleteNewsVideoLink,
+  fetchNewsById,
+  fetchNewsVideoLinks,
+  updateNews,
+  updateNewsVideoLink,
+  type NewsItem,
+  type NewsVideoLink,
+} from "@/lib/news-api";
+import { fetchVideos, type Video as LibraryVideo } from "@/lib/videos-api";
 import {
   anyNewsFullContentOverLimit,
   buildNewsTranslationsPayload,
@@ -177,6 +190,19 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     translations: emptyTranslations(),
   });
 
+  const [videoLinksLoading, setVideoLinksLoading] = useState(false);
+  const [videoLinks, setVideoLinks] = useState<NewsVideoLink[]>([]);
+  const [videoLibraryLoading, setVideoLibraryLoading] = useState(false);
+  const [videoLibrary, setVideoLibrary] = useState<LibraryVideo[]>([]);
+  const [videoAddOpen, setVideoAddOpen] = useState(false);
+  const [videoAddSelectedId, setVideoAddSelectedId] = useState<string | null>(null);
+  const [videoAddSortOrder, setVideoAddSortOrder] = useState("");
+  const [videoEditOpen, setVideoEditOpen] = useState(false);
+  const [videoEditId, setVideoEditId] = useState<string | null>(null);
+  const [videoEditSortOrder, setVideoEditSortOrder] = useState("");
+  const [videoDeleteOpen, setVideoDeleteOpen] = useState(false);
+  const [videoDeleteId, setVideoDeleteId] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -197,7 +223,86 @@ export function NewsDetailsPanel({ id }: { id: string }) {
     }
   }, [id, t]);
 
+  const loadVideoLinks = useCallback(async () => {
+    setVideoLinksLoading(true);
+    try {
+      setVideoLinks(await fetchNewsVideoLinks(id));
+    } catch (e) {
+      toastApiError(e, t("loadError"));
+      setVideoLinks([]);
+    } finally {
+      setVideoLinksLoading(false);
+    }
+  }, [id, t]);
+
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadVideoLinks(); }, [loadVideoLinks]);
+
+  async function ensureVideoLibraryLoaded() {
+    if (videoLibraryLoading) return;
+    if (videoLibrary.length > 0) return;
+    setVideoLibraryLoading(true);
+    try {
+      setVideoLibrary(await fetchVideos());
+    } catch (e) {
+      toastApiError(e, t("loadError"));
+      setVideoLibrary([]);
+    } finally {
+      setVideoLibraryLoading(false);
+    }
+  }
+
+  async function onAddVideoLink() {
+    if (!videoAddSelectedId) return;
+    setSubmitting(true);
+    try {
+      const sortOrder = videoAddSortOrder.trim() ? Number(videoAddSortOrder.trim()) : undefined;
+      await addNewsVideoLink(id, { videoId: videoAddSelectedId, sortOrder: Number.isFinite(sortOrder as any) ? sortOrder : undefined });
+      toast.success(tCommon("updateSuccess"));
+      setVideoAddOpen(false);
+      setVideoAddSelectedId(null);
+      setVideoAddSortOrder("");
+      await loadVideoLinks();
+    } catch (e) {
+      toastApiError(e, tCommon("updateError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onUpdateVideoLink() {
+    if (!videoEditId) return;
+    setSubmitting(true);
+    try {
+      const sortOrder = videoEditSortOrder.trim() ? Number(videoEditSortOrder.trim()) : 0;
+      await updateNewsVideoLink(id, videoEditId, { sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0 });
+      toast.success(tCommon("updateSuccess"));
+      setVideoEditOpen(false);
+      setVideoEditId(null);
+      setVideoEditSortOrder("");
+      await loadVideoLinks();
+    } catch (e) {
+      toastApiError(e, tCommon("updateError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onDeleteVideoLink() {
+    if (!videoDeleteId) return;
+    setSubmitting(true);
+    try {
+      await deleteNewsVideoLink(id, videoDeleteId);
+      toast.success(t("deleteSuccess"));
+      setVideoDeleteOpen(false);
+      setVideoDeleteId(null);
+      await loadVideoLinks();
+    } catch (e) {
+      toastApiError(e, t("deleteError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   function formatDate(value?: string | null): string {
     if (!value) return "—";
@@ -664,7 +769,181 @@ export function NewsDetailsPanel({ id }: { id: string }) {
         </div>
       </Section>
 
+      {/* Videos */}
+      <Section
+        icon={Clapperboard}
+        title="Videos"
+        description="Link existing videos from the library to this news item."
+        badge={<Badge variant="secondary" className="text-xs">{videoLinksLoading ? "…" : videoLinks.length}</Badge>}
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              disabled={videoLinksLoading || submitting}
+              onClick={() => void loadVideoLinks()}
+            >
+              <RefreshCw className={cn("size-3.5", videoLinksLoading && "animate-spin")} />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              disabled={submitting}
+              onClick={() => { void ensureVideoLibraryLoaded(); setVideoAddOpen(true); }}
+            >
+              <Upload className="size-3" />Add
+            </Button>
+          </>
+        }
+      >
+        {videoLinksLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
+          </div>
+        ) : videoLinks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No videos linked yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {videoLinks.map((l) => (
+              <div key={l.id} className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-background px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{l.video?.title ?? "—"}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    sortOrder: <span className="font-medium text-foreground">{l.sortOrder ?? 0}</span>
+                  </p>
+                  {l.video?.embedUrl ? (
+                    <a
+                      href={l.video.embedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex text-xs text-primary underline-offset-2 hover:underline"
+                    >
+                      Open preview
+                    </a>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    disabled={submitting}
+                    onClick={() => { setVideoEditId(l.id); setVideoEditSortOrder(String(l.sortOrder ?? 0)); setVideoEditOpen(true); }}
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    disabled={submitting}
+                    onClick={() => { setVideoDeleteId(l.id); setVideoDeleteOpen(true); }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
       {/* ══ DIALOGS ════════════════════════════════════════════════════════════ */}
+
+      {/* Video link add */}
+      <Dialog open={videoAddOpen} onOpenChange={(open) => { setVideoAddOpen(open); if (open) void ensureVideoLibraryLoaded(); else { setVideoAddSelectedId(null); setVideoAddSortOrder(""); } }}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted"><Clapperboard className="size-3.5 text-muted-foreground" /></div>
+              Add video
+            </DialogTitle>
+            <DialogDescription className="text-xs">Select an existing video and link it to this news item.</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3 py-1">
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Video<RequiredStar /></Label>
+              <select
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={videoAddSelectedId ?? ""}
+                onChange={(e) => setVideoAddSelectedId(e.target.value || null)}
+                disabled={videoLibraryLoading || submitting}
+              >
+                <option value="">{videoLibraryLoading ? "Loading…" : "Select a video"}</option>
+                {videoLibrary.map((v) => (
+                  <option key={v.id} value={v.id}>{v.title}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sort order</Label>
+              <Input inputMode="numeric" value={videoAddSortOrder} placeholder="0" className="h-9" onChange={(e) => setVideoAddSortOrder(e.target.value)} />
+            </div>
+          </div>
+          <Separator />
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setVideoAddOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={submitting || !videoAddSelectedId} onClick={() => void onAddVideoLink()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video link edit */}
+      <Dialog open={videoEditOpen} onOpenChange={(open) => { setVideoEditOpen(open); if (!open) { setVideoEditId(null); setVideoEditSortOrder(""); } }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border bg-muted"><Pencil className="size-3.5 text-muted-foreground" /></div>
+              Edit video link
+            </DialogTitle>
+            <DialogDescription className="text-xs">Update the link sort order.</DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className="grid gap-3 py-1">
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sort order</Label>
+              <Input inputMode="numeric" value={videoEditSortOrder} className="h-9" onChange={(e) => setVideoEditSortOrder(e.target.value)} />
+            </div>
+          </div>
+          <Separator />
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setVideoEditOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={submitting || !videoEditId} onClick={() => void onUpdateVideoLink()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video link delete */}
+      <Dialog open={videoDeleteOpen} onOpenChange={(open) => { setVideoDeleteOpen(open); if (!open) setVideoDeleteId(null); }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <div className="flex size-7 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5"><Trash2 className="size-3.5 text-destructive" /></div>
+              Remove video
+            </DialogTitle>
+            <DialogDescription className="text-xs">This will unlink the video from this news item.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => setVideoDeleteOpen(false)}>Cancel</Button>
+            <Button type="button" variant="destructive" disabled={submitting || !videoDeleteId} onClick={() => void onDeleteVideoLink()} className="gap-1.5">
+              {submitting ? <RefreshCw className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

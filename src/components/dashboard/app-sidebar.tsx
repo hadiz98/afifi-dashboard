@@ -19,6 +19,7 @@ import {
   ChevronDown,
   FileText,
   Info,
+  Video,
 } from "lucide-react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
@@ -59,6 +60,7 @@ type NavLabelKey =
   | "horses"
   | "events"
   | "gallery"
+  | "videos"
   | "settings"
   | "users"
   | "roles";
@@ -77,6 +79,7 @@ const allNavDefs: readonly NavDef[] = [
   { href: "/pages", labelKey: "pages", icon: FileText, staffOnly: true },
   { href: "/farm", labelKey: "farm", icon: Info, staffOnly: true },
   { href: "/gallery", labelKey: "gallery", icon: Images, staffOnly: true },
+  { href: "/videos", labelKey: "videos", icon: Video, staffOnly: true },
   { href: "/settings", labelKey: "settings", icon: Settings, staffOnly: true },
   {
     href: "/newsletter",

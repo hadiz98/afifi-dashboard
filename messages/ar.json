@@ -18,6 +18,7 @@
     "pages": "الصفحات",
     "farm": "من نحن",
     "gallery": "المعرض",
+    "videos": "الفيديوهات",
     "settings": "الإعدادات",
     "newsletter": "النشرة البريدية",
     "horses": "الخيل",
@@ -201,6 +202,70 @@
     "invalidSortOrder": "يجب أن يكون ترتيب العرض رقماً.",
     "sortOrderBase": "أساس ترتيب الرفع",
     "sortOrderBaseHint": "اختياري. يطبق على أول ملف مرفوع؛ والخادم يعيّن base + i لباقي الملفات."
+  },
+  "VideosPage": {
+    "title": "الفيديوهات",
+    "description": "ارفع وأدر الفيديوهات المستضافة على Bunny Stream.",
+    "gridTitle": "الفيديوهات",
+    "count": "{count, plural, zero {لا يوجد فيديو} one {فيديو واحد} two {فيديوان} few {# فيديوهات} many {# فيديو} other {# فيديو}}",
+    "upload": "رفع",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "sync": "تحديث من Bunny",
+    "openExternal": "فتح المضمَّن",
+    "hidden": "مخفي",
+
+    "loadError": "تعذر تحميل الفيديوهات",
+    "empty": "لا توجد فيديوهات بعد.",
+    "emptyHint": "ارفع أول فيديو للبدء.",
+
+    "file": "الملف",
+    "pickFileHint": "اضغط لاختيار ملف فيديو",
+    "limitsHint": "MP4 / MOV / WEBM · حتى 2 جيجابايت · رفع قابل للاستئناف",
+    "invalidFileType": "يرجى اختيار ملف فيديو.",
+    "fileTooLarge": "يجب ألا يتجاوز حجم الفيديو {max}.",
+    "fileRequired": "يرجى اختيار ملف فيديو.",
+    "titleField": "العنوان",
+    "titlePlaceholder": "أدخل عنواناً للفيديو",
+    "titleRequired": "العنوان مطلوب.",
+    "descriptionField": "الوصف",
+    "descriptionPlaceholder": "وصف اختياري للفيديو.",
+
+    "uploadTitle": "رفع فيديو",
+    "uploadDescription": "تُرفع الملفات مباشرة إلى Bunny Stream. أبقِ النافذة مفتوحة حتى يكتمل الرفع.",
+    "uploadingLabel": "جارٍ الرفع…",
+    "uploadSuccess": "تم رفع الفيديو. Bunny يعالجه الآن.",
+    "uploadError": "تعذر رفع الفيديو",
+    "uploadCancelled": "تم إلغاء الرفع",
+    "cancelUpload": "إلغاء الرفع",
+
+    "editTitle": "تعديل الفيديو",
+    "editDescription": "حدّث العنوان والوصف والظهور والترتيب.",
+    "editSuccess": "تم تحديث الفيديو",
+    "editError": "تعذر تحديث الفيديو",
+    "activeLabel": "نشط",
+    "activeHint": "عند الإيقاف، يُخفى الفيديو عن الواجهات العامة.",
+    "sortOrder": "ترتيب العرض",
+    "sortOrderHint": "الأرقام الأصغر تظهر أولاً.",
+    "invalidSortOrder": "يجب أن يكون ترتيب العرض رقماً.",
+
+    "deleteTitle": "حذف الفيديو؟",
+    "deleteDescription": "سيتم حذف الفيديو من Bunny Stream ومن لوحة التحكم.",
+    "confirmDelete": "حذف",
+    "deleteSuccess": "تم حذف الفيديو",
+    "deleteError": "تعذر حذف الفيديو",
+
+    "syncSuccess": "تم تحديث الحالة",
+    "syncError": "تعذر تحديث الحالة",
+
+    "status": {
+      "pending": "قيد الانتظار",
+      "processing": "قيد المعالجة",
+      "ready": "جاهز",
+      "failed": "فشل"
+    }
   },
   "HomePage": {
     "title": "لوحة تحكم عفيفي",

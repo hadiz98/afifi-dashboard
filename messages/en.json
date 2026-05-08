@@ -18,6 +18,7 @@
     "pages": "Pages",
     "farm": "About Us",
     "gallery": "Gallery",
+    "videos": "Videos",
     "settings": "Settings",
     "newsletter": "Newsletter",
     "horses": "Horses",
@@ -201,6 +202,70 @@
     "invalidSortOrder": "Sort order must be a number.",
     "sortOrderBase": "Sort order base",
     "sortOrderBaseHint": "Optional. Applies to the first uploaded file; the server assigns base + i for each next file."
+  },
+  "VideosPage": {
+    "title": "Videos",
+    "description": "Upload and manage videos hosted on Bunny Stream.",
+    "gridTitle": "Videos",
+    "count": "{count, plural, one {# video} other {# videos}}",
+    "upload": "Upload",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "sync": "Sync from Bunny",
+    "openExternal": "Open embed",
+    "hidden": "Hidden",
+
+    "loadError": "Could not load videos",
+    "empty": "No videos yet.",
+    "emptyHint": "Upload your first video to get started.",
+
+    "file": "File",
+    "pickFileHint": "Click to select a video file",
+    "limitsHint": "MP4 / MOV / WEBM · Up to 2 GB · Resumable upload",
+    "invalidFileType": "Please choose a video file.",
+    "fileTooLarge": "Video must be {max} or smaller.",
+    "fileRequired": "Please choose a video file.",
+    "titleField": "Title",
+    "titlePlaceholder": "Enter a title for this video",
+    "titleRequired": "Title is required.",
+    "descriptionField": "Description",
+    "descriptionPlaceholder": "Optional description for this video.",
+
+    "uploadTitle": "Upload a video",
+    "uploadDescription": "Files are uploaded directly to Bunny Stream. The browser stays open until the upload finishes.",
+    "uploadingLabel": "Uploading…",
+    "uploadSuccess": "Video uploaded. Bunny is processing it now.",
+    "uploadError": "Could not upload video",
+    "uploadCancelled": "Upload cancelled",
+    "cancelUpload": "Cancel upload",
+
+    "editTitle": "Edit video",
+    "editDescription": "Update title, description, visibility, and ordering.",
+    "editSuccess": "Video updated",
+    "editError": "Could not update video",
+    "activeLabel": "Active",
+    "activeHint": "When off, the video is hidden from public surfaces.",
+    "sortOrder": "Sort order",
+    "sortOrderHint": "Lower values appear first.",
+    "invalidSortOrder": "Sort order must be a number.",
+
+    "deleteTitle": "Delete video?",
+    "deleteDescription": "This will remove the video from Bunny Stream and the dashboard.",
+    "confirmDelete": "Delete",
+    "deleteSuccess": "Video deleted",
+    "deleteError": "Could not delete video",
+
+    "syncSuccess": "Status refreshed",
+    "syncError": "Could not refresh status",
+
+    "status": {
+      "pending": "Pending",
+      "processing": "Processing",
+      "ready": "Ready",
+      "failed": "Failed"
+    }
   },
   "HomePage": {
     "title": "Afifi dashboard",

@@ -10,6 +10,8 @@ export type Video = {
   bunnyVideoGuid: string;
   title: string;
   description: string | null;
+  titleTranslations?: Record<string, string> | null;
+  descriptionTranslations?: Record<string, string> | null;
   bunnyStatus: number | null;
   hlsUrl: string | null;
   thumbnailUrl: string | null;
@@ -42,6 +44,8 @@ export type UploadSessionResponse = {
 export type CreateUploadSessionInput = {
   title: string;
   description?: string;
+  titleTranslations?: Record<string, string>;
+  descriptionTranslations?: Record<string, string>;
   filetype?: string;
   tusTitle?: string;
   thumbnailTime?: number;
@@ -50,6 +54,8 @@ export type CreateUploadSessionInput = {
 export type UpdateVideoInput = {
   title?: string;
   description?: string | null;
+  titleTranslations?: Record<string, string> | null;
+  descriptionTranslations?: Record<string, string> | null;
   isActive?: boolean;
   sortOrder?: number;
 };
@@ -86,6 +92,17 @@ function asString(v: unknown): string | null {
   return typeof v === "string" ? v : null;
 }
 
+function asRecordStringString(v: unknown): Record<string, string> | null {
+  if (!v || typeof v !== "object") return null;
+  if (Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(o)) {
+    if (typeof val === "string") out[k] = val;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function normalizeVideo(raw: unknown): Video | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -98,6 +115,8 @@ function normalizeVideo(raw: unknown): Video | null {
     bunnyVideoGuid: guid,
     title,
     description: asString(o.description),
+    titleTranslations: asRecordStringString(o.titleTranslations),
+    descriptionTranslations: asRecordStringString(o.descriptionTranslations),
     bunnyStatus: asNumber(o.bunnyStatus),
     hlsUrl: asString(o.hlsUrl),
     thumbnailUrl: asString(o.thumbnailUrl),
@@ -187,6 +206,8 @@ export async function createVideoUploadSession(
 ): Promise<UploadSessionResponse> {
   const body: Record<string, unknown> = { title: input.title };
   if (input.description !== undefined) body.description = input.description;
+  if (input.titleTranslations !== undefined) body.titleTranslations = input.titleTranslations;
+  if (input.descriptionTranslations !== undefined) body.descriptionTranslations = input.descriptionTranslations;
   if (input.filetype !== undefined) body.filetype = input.filetype;
   if (input.tusTitle !== undefined) body.tusTitle = input.tusTitle;
   if (input.thumbnailTime !== undefined) body.thumbnailTime = input.thumbnailTime;
@@ -205,6 +226,8 @@ export async function updateVideo(id: string, patch: UpdateVideoInput): Promise<
   const body: Record<string, unknown> = {};
   if (patch.title !== undefined) body.title = patch.title;
   if (patch.description !== undefined) body.description = patch.description;
+  if (patch.titleTranslations !== undefined) body.titleTranslations = patch.titleTranslations;
+  if (patch.descriptionTranslations !== undefined) body.descriptionTranslations = patch.descriptionTranslations;
   if (patch.isActive !== undefined) body.isActive = patch.isActive;
   if (patch.sortOrder !== undefined) body.sortOrder = patch.sortOrder;
 

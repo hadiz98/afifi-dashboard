@@ -230,8 +230,13 @@
     "titleField": "العنوان",
     "titlePlaceholder": "أدخل عنواناً للفيديو",
     "titleRequired": "العنوان مطلوب.",
+    "titleArField": "العنوان (بالعربية)",
+    "titleArPlaceholder": "أدخل العنوان بالعربية",
+    "titleArRequired": "العنوان بالعربية مطلوب.",
     "descriptionField": "الوصف",
     "descriptionPlaceholder": "وصف اختياري للفيديو.",
+    "descriptionArField": "الوصف (بالعربية)",
+    "descriptionArPlaceholder": "وصف اختياري للفيديو بالعربية.",
 
     "uploadTitle": "رفع فيديو",
     "uploadDescription": "تُرفع الملفات مباشرة إلى Bunny Stream. أبقِ النافذة مفتوحة حتى يكتمل الرفع.",

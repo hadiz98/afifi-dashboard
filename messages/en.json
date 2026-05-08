@@ -230,8 +230,13 @@
     "titleField": "Title",
     "titlePlaceholder": "Enter a title for this video",
     "titleRequired": "Title is required.",
+    "titleArField": "Title (Arabic)",
+    "titleArPlaceholder": "Enter the Arabic title",
+    "titleArRequired": "Arabic title is required.",
     "descriptionField": "Description",
     "descriptionPlaceholder": "Optional description for this video.",
+    "descriptionArField": "Description (Arabic)",
+    "descriptionArPlaceholder": "Optional Arabic description for this video.",
 
     "uploadTitle": "Upload a video",
     "uploadDescription": "Files are uploaded directly to Bunny Stream. The browser stays open until the upload finishes.",

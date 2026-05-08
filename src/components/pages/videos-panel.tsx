@@ -88,8 +88,10 @@ export function VideosPanel() {
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadTitleEn, setUploadTitleEn] = useState("");
+  const [uploadTitleAr, setUploadTitleAr] = useState("");
+  const [uploadDescriptionEn, setUploadDescriptionEn] = useState("");
+  const [uploadDescriptionAr, setUploadDescriptionAr] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ sent: number; total: number } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -98,8 +100,10 @@ export function VideosPanel() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
+  const [editTitleEn, setEditTitleEn] = useState("");
+  const [editTitleAr, setEditTitleAr] = useState("");
+  const [editDescriptionEn, setEditDescriptionEn] = useState("");
+  const [editDescriptionAr, setEditDescriptionAr] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [editSortOrder, setEditSortOrder] = useState("");
 
@@ -179,8 +183,10 @@ export function VideosPanel() {
 
   function resetUploadState() {
     setUploadFile(null);
-    setUploadTitle("");
-    setUploadDescription("");
+    setUploadTitleEn("");
+    setUploadTitleAr("");
+    setUploadDescriptionEn("");
+    setUploadDescriptionAr("");
     setUploadError(null);
     setUploadProgress(null);
     setUploading(false);
@@ -206,17 +212,23 @@ export function VideosPanel() {
     }
     setUploadError(null);
     setUploadFile(file);
-    if (!uploadTitle.trim()) {
+    if (!uploadTitleEn.trim()) {
       const baseName = file.name.replace(/\.[^.]+$/, "");
-      setUploadTitle(baseName);
+      setUploadTitleEn(baseName);
     }
   }
 
   async function onUpload() {
-    const title = uploadTitle.trim();
-    if (!title) {
+    const titleEn = uploadTitleEn.trim();
+    const titleAr = uploadTitleAr.trim();
+    if (!titleEn) {
       setUploadError(t("titleRequired"));
       toast.error(t("titleRequired"));
+      return;
+    }
+    if (!titleAr) {
+      setUploadError(t("titleArRequired"));
+      toast.error(t("titleArRequired"));
       return;
     }
     if (!uploadFile) {
@@ -233,8 +245,12 @@ export function VideosPanel() {
     let session;
     try {
       session = await createVideoUploadSession({
-        title,
-        description: uploadDescription.trim() || undefined,
+        title: titleEn,
+        description: uploadDescriptionEn.trim() || undefined,
+        titleTranslations: { en: titleEn, ar: titleAr },
+        descriptionTranslations: uploadDescriptionAr.trim()
+          ? { en: uploadDescriptionEn.trim() || "", ar: uploadDescriptionAr.trim() }
+          : undefined,
         filetype: uploadFile.type || "video/mp4",
         tusTitle: uploadFile.name,
       });
@@ -298,8 +314,10 @@ export function VideosPanel() {
 
   function openEdit(row: Video) {
     setEditId(row.id);
-    setEditTitle(row.title);
-    setEditDescription(row.description ?? "");
+    setEditTitleEn(row.titleTranslations?.en ?? row.title);
+    setEditTitleAr(row.titleTranslations?.ar ?? "");
+    setEditDescriptionEn(row.descriptionTranslations?.en ?? row.description ?? "");
+    setEditDescriptionAr(row.descriptionTranslations?.ar ?? "");
     setEditIsActive(row.isActive);
     setEditSortOrder(typeof row.sortOrder === "number" ? String(row.sortOrder) : "");
     setEditOpen(true);
@@ -307,9 +325,14 @@ export function VideosPanel() {
 
   async function onSaveMeta() {
     if (!editId) return;
-    const title = editTitle.trim();
-    if (!title) {
+    const titleEn = editTitleEn.trim();
+    const titleAr = editTitleAr.trim();
+    if (!titleEn) {
       toast.error(t("titleRequired"));
+      return;
+    }
+    if (!titleAr) {
+      toast.error(t("titleArRequired"));
       return;
     }
     const sortRaw = editSortOrder.trim();
@@ -320,8 +343,12 @@ export function VideosPanel() {
     setSubmitting(true);
     try {
       await updateVideo(editId, {
-        title,
-        description: editDescription.trim() ? editDescription.trim() : null,
+        title: titleEn,
+        description: editDescriptionEn.trim() ? editDescriptionEn.trim() : null,
+        titleTranslations: { en: titleEn, ar: titleAr },
+        descriptionTranslations: editDescriptionAr.trim()
+          ? { en: editDescriptionEn.trim() || "", ar: editDescriptionAr.trim() }
+          : null,
         isActive: editIsActive,
         sortOrder: sortRaw ? Number(sortRaw) : undefined,
       });
@@ -669,11 +696,24 @@ export function VideosPanel() {
                 {t("titleField")}
               </Label>
               <Input
-                value={uploadTitle}
+                value={uploadTitleEn}
                 disabled={uploading}
                 className="h-9"
                 placeholder={t("titlePlaceholder")}
-                onChange={(e) => setUploadTitle(e.target.value)}
+                onChange={(e) => setUploadTitleEn(e.target.value)}
+                maxLength={500}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {t("titleArField")}
+              </Label>
+              <Input
+                value={uploadTitleAr}
+                disabled={uploading}
+                className="h-9"
+                placeholder={t("titleArPlaceholder")}
+                onChange={(e) => setUploadTitleAr(e.target.value)}
                 maxLength={500}
               />
             </div>
@@ -682,10 +722,23 @@ export function VideosPanel() {
                 {t("descriptionField")}
               </Label>
               <Textarea
-                value={uploadDescription}
+                value={uploadDescriptionEn}
                 disabled={uploading}
                 placeholder={t("descriptionPlaceholder")}
-                onChange={(e) => setUploadDescription(e.target.value)}
+                onChange={(e) => setUploadDescriptionEn(e.target.value)}
+                maxLength={10000}
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {t("descriptionArField")}
+              </Label>
+              <Textarea
+                value={uploadDescriptionAr}
+                disabled={uploading}
+                placeholder={t("descriptionArPlaceholder")}
+                onChange={(e) => setUploadDescriptionAr(e.target.value)}
                 maxLength={10000}
                 className="min-h-[80px]"
               />
@@ -727,7 +780,7 @@ export function VideosPanel() {
             )}
             <Button
               type="button"
-              disabled={uploading || !uploadFile || !uploadTitle.trim()}
+              disabled={uploading || !uploadFile || !uploadTitleEn.trim() || !uploadTitleAr.trim()}
               onClick={() => void onUpload()}
               className="gap-1.5"
             >
@@ -749,8 +802,10 @@ export function VideosPanel() {
           setEditOpen(open);
           if (!open) {
             setEditId(null);
-            setEditTitle("");
-            setEditDescription("");
+            setEditTitleEn("");
+            setEditTitleAr("");
+            setEditDescriptionEn("");
+            setEditDescriptionAr("");
             setEditIsActive(true);
             setEditSortOrder("");
           }
@@ -773,9 +828,20 @@ export function VideosPanel() {
                 {t("titleField")}
               </Label>
               <Input
-                value={editTitle}
+                value={editTitleEn}
                 className="h-9"
-                onChange={(e) => setEditTitle(e.target.value)}
+                onChange={(e) => setEditTitleEn(e.target.value)}
+                maxLength={500}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {t("titleArField")}
+              </Label>
+              <Input
+                value={editTitleAr}
+                className="h-9"
+                onChange={(e) => setEditTitleAr(e.target.value)}
                 maxLength={500}
               />
             </div>
@@ -784,8 +850,19 @@ export function VideosPanel() {
                 {t("descriptionField")}
               </Label>
               <Textarea
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
+                value={editDescriptionEn}
+                onChange={(e) => setEditDescriptionEn(e.target.value)}
+                maxLength={10000}
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {t("descriptionArField")}
+              </Label>
+              <Textarea
+                value={editDescriptionAr}
+                onChange={(e) => setEditDescriptionAr(e.target.value)}
                 maxLength={10000}
                 className="min-h-[80px]"
               />
@@ -818,7 +895,7 @@ export function VideosPanel() {
             </Button>
             <Button
               type="button"
-              disabled={submitting || !editId || !editTitle.trim()}
+              disabled={submitting || !editId || !editTitleEn.trim() || !editTitleAr.trim()}
               onClick={() => void onSaveMeta()}
               className="gap-1.5"
             >
